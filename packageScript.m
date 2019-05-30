@@ -5,11 +5,12 @@ function packageScript(scriptPath, varargin)
 %         packageScript('scriptName.m', '/path/where/you/want/it/to/go')
 %
 % where,
-%    scriptPath is the name of a matlab script. If it is in the current
+%    scriptPath is the name.path of a matlab script. If it is in the current
 %       matlab path, just the script name is enough. Otherwise, a full path is
 %       required.
 %    destination (optional) is the folder in which you want the package 
-%       folder to be saved.
+%       folder to be saved. If omitted, defaults to the current working
+%       directory.
 %
 % See also: 
 %
