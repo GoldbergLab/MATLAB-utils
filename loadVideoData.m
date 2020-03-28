@@ -9,8 +9,13 @@ end
 
 [~, ~, ext] = fileparts(videoFilename);
 
+verbose = true;
+
 if strcmp(ext, '.tif')
     % Check if file is a .tif file
+    if verbose
+        disp('Loading as .tif file')
+    end
     tiffInfo = imfinfo(videoFilename);
     numFrames = length(tiffInfo);
     width = tiffInfo(1).Width;
@@ -21,12 +26,17 @@ if strcmp(ext, '.tif')
     end
 else
     try
+        if verbose
+            disp('Loading using read method with VideoReader')
+        end
         video = VideoReader(videoFilename);
         videoData = read(video);
     catch
         try
+            if verbose
+                disp('Loading using read method with VideoReader and native option')
+            end
             video = VideoReader(videoFilename);
-            disp('Method 1 failed, attempting to load video with method #2');
             videoDataStruct = read(video, [1, video.NumberOfFrames], 'native');
             videoData = zeros([size(videoDataStruct(1).cdata), length(videoDataStruct)]);
             for k = 1:length(videoDataStruct)
@@ -34,6 +44,9 @@ else
             end
         catch
             try
+                if verbose
+                    disp('Loading using read method with VideoReader and native option with Inf as end frame')
+                end
                 video = VideoReader(videoFilename);
                 %    disp('Attempting to load video with method #1');
                 videoDataStruct = read(video, [1, Inf], 'native');
@@ -42,8 +55,10 @@ else
                     videoData(:, :, k) = videoDataStruct(k).cdata;
                 end
             catch
+                if verbose
+                    disp('Loading using VideoReader.readFrame and native option')
+                end
                 video = VideoReader(videoFilename);
-                disp('Method 3 failed, attempting to load video with method #4');
                 videoData = zeros(video.Height, video.Width, int32(video.Duration * video.FrameRate));
                 frameNum = 1;
                 while hasFrame(video)
@@ -57,6 +72,10 @@ end
 
 % Get rid of duplicate RGB channels
 videoDataSize = size(videoData);
+if length(videoDataSize) == 4 && videoDataSize(3) == 1
+    % For some reason we have a singleton dimension - let's get rid of it
+    videoData = squeeze(videoData);
+end
 if length(videoDataSize) == 4 && videoDataSize(3) == 3 && makeGrayscale
     % third dimension is probably color channels
     videoData = squeeze(videoData(:, :, 1, :));
