@@ -3,6 +3,7 @@ function packageScript(scriptPath, varargin)
 %   the script and all the dependencies.
 % usage:  packageScript('scriptName.m')
 %         packageScript('scriptName.m', '/path/where/you/want/it/to/go')
+%         packageScript('scriptName.m', '/path/where/you/want/it/to/go', suffix)
 %
 % where,
 %    scriptPath is the name.path of a matlab script. If it is in the current

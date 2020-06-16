@@ -15,10 +15,15 @@ function videoData = loadVideoClip(videoFilename, startFrame, endFrame)
 %
 
 video = VideoReader(videoFilename);
-videoDataStruct = read(video, [startFrame, endFrame], 'native');
-videoData = zeros([size(videoDataStruct(1).cdata), length(videoDataStruct)]);
-for k = 1:length(videoDataStruct)
-    videoData(:, :, k) = videoDataStruct(k).cdata;
+rawVideoData = read(video, [startFrame, endFrame], 'native');
+vdisp(rawVideoData)
+if isstruct(rawVideoData)
+    videoData = zeros([size(rawVideoData(1).cdata), length(rawVideoData)]);
+    for k = 1:length(rawVideoData)
+        videoData(:, :, k) = rawVideoData(k).cdata;
+    end
+elseif isnumeric(rawVideoData)
+    videoData = rawVideoData;
 end
 % Get rid of duplicate RGB channels
 videoDataSize = size(videoData);

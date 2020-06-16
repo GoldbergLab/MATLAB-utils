@@ -1,6 +1,6 @@
 function saveVideoData(videoData, filename, varargin)
 
-if nargin == 3
+if nargin >=3
     videoType = varargin{1};
 else
     if ndims(videoData) == 3
@@ -10,7 +10,14 @@ else
     end
 end
 
+if nargin >= 4
+    fps = varargin{2};
+else
+    fps = 30;
+end
+
 v = VideoWriter(filename, videoType);
+v.FrameRate = fps;
 open(v);
 videoSize = size(videoData);
 % for k = 1:videoSize(3)
