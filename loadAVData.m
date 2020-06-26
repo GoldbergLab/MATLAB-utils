@@ -1,8 +1,15 @@
-function avData = loadAVData(videoFilename, stdoutQueue)
-if exist('stdoutQueue', 'var')
-    pardisp = @(varargin)stdoutQueue.send(varargin{:});
+function avData = loadAVData(videoFilename, stdoutQueue, verbose)
+if ~exist('verbose', 'var')
+    verbose = false;
+end
+if verbose
+    if exist('stdoutQueue', 'var')
+        pardisp = @(varargin)stdoutQueue.send(varargin{:});
+    else
+        pardisp = @(varargin)disp(varargin{:});
+    end
 else
-    pardisp = @(varargin)disp(varargin{:});
+    pardisp = @NOP;
 end
 %This currently works with grayscale avi and tif files
 pardisp('Loading video')
@@ -27,11 +34,13 @@ end
 % end
 
 pardisp('Loading audio')
-audioData = audioread(videoFilename);
+[audioData, sampleRate] = audioread(videoFilename);
 
 avData.Path = videoFilename;
 avData.VideoData = videoData;
 avData.AudioData = audioData;
+avData.FrameRate = video.FrameRate;
+avData.SampleRate = sampleRate;
 %videoFReader = vision.VideoFileReader(videoFilename, 'AudioOutputPort', true);
 %audioData = [];
 %audioChunkSizes = [];
