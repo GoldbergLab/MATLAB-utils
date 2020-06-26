@@ -17,6 +17,11 @@ function convertCinesToAVIs(varargin)
 %    msgQueue is an optional DataQueue for sending progress messages to the 
 %       calling function
 %
+% Example:
+% >>  rootDir = 'path/to/root/dir';
+% >>  cineFileList = dir(fullfile(rootDir, '*.cine'));
+% >>  convertCinesToAvis(cineFileList);
+%
 % See also: convertCineToAVI
 
 % Version: 1.0
