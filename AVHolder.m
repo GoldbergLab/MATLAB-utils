@@ -156,7 +156,7 @@ classdef AVHolder < handle
         end
         function                setImageDisplaySize(obj, size)
             obj.ImageDisplaySize = size;
-            if 
+%            if 
         end
         function                deltaFrame(obj, varargin)
             if ~isempty(varargin)
@@ -175,7 +175,6 @@ classdef AVHolder < handle
             obj.changeFrame(1);
         end
         function                updateFrame(obj)
-            
             if isempty(obj.Figure) || ~isvalid(obj.Figure)
                 obj.createGraphics();
             end
