@@ -34,6 +34,14 @@ else
     includeFiles = true;
 end
 
+if strcmp(rootDir, '.')
+    % To allow for matching paths, convert '.' to absolute path
+    rootDir = pwd();
+elseif strcmp(rootDir, '..')
+    % To allow for matching paths, convert '..' to absolute path
+    [rootDir, ~, ~] = fileparts(pwd());
+end
+
 files = dir(rootDir);
 % Exclude dot directores - '.' and '..'
 files = files(~cellfun(@isDotDir, {files.name}));
@@ -50,21 +58,21 @@ end
 
 filepaths = {};
 for k = 1:length(files)
-    [path, name, ext] = fileparts(files(k).name);
+    [~, name, ext] = fileparts(files(k).name);
     if matchPath
-        matchName = fullfile(files(k).folder, files(k).name);
+        matchName = fullfile(rootDir, files(k).name);
     else
         matchName = [name, ext];
     end
     if regexp(matchName, regex)
-        filepaths(end+1) = {fullfile(files(k).folder, files(k).name)};
+        filepaths(end+1) = {fullfile(rootDir, files(k).name)};
     end
 end
 
 if recurse
     for k = 1:length(dirs)
         if ~any(strcmp(dirs(k).name, {'.', '..'}))
-            dirpath = fullfile(dirs(k).folder, dirs(k).name);
+            dirpath = fullfile(rootDir, dirs(k).name);
             filepaths = [filepaths, findFilesByRegex(dirpath, regex, matchPath, recurse, includeFolders, includeFiles)];
         end
     end
