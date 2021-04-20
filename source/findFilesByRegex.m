@@ -7,7 +7,8 @@ function filepaths = findFilesByRegex(rootDir, regex, varargin)
 % matchPath (optional): boolean flag, apply regex to path as well as name, 
 %   default false
 % recurse (optional): boolean flag, apply regex recursively to 
-%   subdirectories as well, default true
+%   subdirectories as well, default true. If given as a positive integer, it
+%   specifies the recursion depth.
 % includeFolders (optional) boolean flag, include folders in results, 
 %   default false.
 % includeFiles (optional) boolean flag, include regular files in results, 
@@ -70,6 +71,10 @@ for k = 1:length(files)
 end
 
 if recurse
+    if ~islogical(recurse) 
+        % recurse is an integer recursion depth, decrement it!
+        recurse = recurse - 1;
+    end
     for k = 1:length(dirs)
         if ~any(strcmp(dirs(k).name, {'.', '..'}))
             dirpath = fullfile(rootDir, dirs(k).name);
