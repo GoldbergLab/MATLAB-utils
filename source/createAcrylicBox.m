@@ -1,4 +1,4 @@
-function svgText = createAcrylicBox(boxSize, svgSavePath, varargin)
+function svgText = createAcrylicBox(boxSize, svgSavePath, inchesPerTab, materialThickness, materialDims)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % createAcrylicBox: Generate an SVG image of the pieces of a box with the
@@ -44,25 +44,22 @@ function svgText = createAcrylicBox(boxSize, svgSavePath, varargin)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Determine # of tabs to include
-if nargin > 2
-    inchesPerTab = varargin{1};
-else
+if ~exist('inchesPerTab', 'var')
     inchesPerTab = 0.5;
 end
 numTabs = [0, 0, 0];
 for k = 1:3
     dim = boxSize(k);
     numTabs(k) = ceil(dim/(inchesPerTab*1000));
+    dim
+    inchesPerTab
+    numTabs
 end
 
-if nargin > 3
-    materialThickness = varargin{2};
-else
+if ~exist('materialThickness', 'var')
     materialThickness = 125;
 end
-if nargin > 4
-    materialDims = varargin{3};
-else
+if ~exist('materialDims', 'var')
     materialDims = [24000, 12000];
 end
 
