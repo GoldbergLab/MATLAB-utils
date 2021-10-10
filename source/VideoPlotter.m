@@ -22,6 +22,9 @@ classdef VideoPlotter < handle
     end
     methods
         function obj = VideoPlotter(videoData)
+            % Create a VideoPlotter object
+            %   videoData - either a char array representing a path to a
+            %       video file, or a HxWxN or HxWxCxN array of video data
             obj.video = obj.sanitizeVideo(videoData);
             obj.numFrames = size(obj.video, 4);
             obj.videoWidth = size(obj.video, 2);
@@ -339,13 +342,6 @@ classdef VideoPlotter < handle
 %             p = obj.canvas.InnerPosition;
 %             obj.canvas.InnerPosition = [p(1), p(2), p(1) + obj.videoWidth, p(2) + obj.videoHeight];
         end
-%         function applyMask(obj, mask, alpha, origin)
-%             obj.ensureCanvas();
-%             x = [origin(1), origin(1) + size(mask, 2) - 1];
-%             y = [origin(2), origin(2) + size(mask, 1) - 1];
-%             im = image(x, y, mask, 'Parent', obj.canvas);
-%             set(im, 'AlphaData', alpha);
-%         end
         function applyPlot(obj, frameNum, xValues, yValues, historyMode, plotProperties)
             obj.ensureCanvas();
             if isnan(historyMode)
@@ -366,7 +362,12 @@ classdef VideoPlotter < handle
             obj.ensureCanvas();
             text(obj.canvas, x, y, txt, textProperties{:});
         end
+%         function applyMask(obj, mask, alpha, origin)
+%             obj.ensureCanvas();
+%             x = [origin(1), origin(1) + size(mask, 2) - 1];
+%             y = [origin(2), origin(2) + size(mask, 1) - 1];
+%             im = image(x, y, mask, 'Parent', obj.canvas);
+%             set(im, 'AlphaData', alpha);
+%         end
     end
-    methods (Static)
-	end
 end
