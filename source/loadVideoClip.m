@@ -16,7 +16,7 @@ function videoData = loadVideoClip(videoFilename, startFrame, endFrame)
 
 video = VideoReader(videoFilename);
 rawVideoData = read(video, [startFrame, endFrame], 'native');
-vdisp(rawVideoData)
+%vdisp(rawVideoData)
 if isstruct(rawVideoData)
     videoData = zeros([size(rawVideoData(1).cdata), length(rawVideoData)]);
     for k = 1:length(rawVideoData)
