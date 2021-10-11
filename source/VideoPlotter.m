@@ -99,7 +99,9 @@ classdef VideoPlotter < handle
             if ~isnumeric(alpha) || alpha < 0 || alpha > 1
                 error('Alpha value must be a double between 0 and 1')
             end
+            % Create transparency mask
             alpha3 = alpha * mask;
+            % Premultiply alpha and color
             if obj.areMasksStatic(end)
                 mask3 = uint8(cat(3, mask*(alpha*255*rgb(1)), ...
                                     mask*(alpha*255*rgb(2)), ...
@@ -113,22 +115,38 @@ classdef VideoPlotter < handle
             obj.overlayMasks = [obj.overlayMasks, mask3];
             obj.overlayAlphas = [obj.overlayAlphas, alpha3];
             obj.overlayOrigins = [obj.overlayOrigins, origin];
+            % Need to update masked video, so for now, delete it:
+            obj.maskedVideo = [];
         end
         function generateMaskedVideo(obj)
             obj.maskedVideo = obj.video;
             for k = 1:length(obj.overlayMasks)
+                % Requested mask origin and width
                 x = obj.overlayOrigins{k}(1);
                 y = obj.overlayOrigins{k}(2);
                 w = size(obj.overlayMasks{k}, 2);
                 h = size(obj.overlayMasks{k}, 1);
-                inverseAlphas = (1-obj.overlayAlphas{k});
+                % Trim mask so it fits into the frame
+                x0 = max(1, 1 - x + 1);
+                y0 = max(1, 1 - y + 1);
+                x1 = min(w, obj.videoWidth  - x + 1);
+                y1 = min(h, obj.videoHeight - y + 1);
+                overlayMask = obj.overlayMasks{k}(y0:y1, x0:x1, :, :);
+                overlayAlpha = obj.overlayAlphas{k}(y0:y1, x0:x1, :);
+                % Get trimmed video to match mask
+                X0 = max(1, x);
+                Y0 = max(1, y);
+                X1 = min(obj.videoWidth,  x+w-1);
+                Y1 = min(obj.videoHeight, y+h-1);
+                subFrame = double(obj.maskedVideo(Y0:Y1, X0:X1, :, :));
+                % Compute composite image of frame = mask
+                inverseAlphas = (1-overlayAlpha);
                 alphaSize = size(inverseAlphas);
                 inverseAlphas = reshape(inverseAlphas, [alphaSize(1:2), 1, alphaSize(3)]);
-                subFrame = double(obj.maskedVideo(y:y+h-1, x:x+w-1, :, :));
                 subFrameAlpha = cat(3, uint8(inverseAlphas.*subFrame(:, :, 1, :)), ...
                                        uint8(inverseAlphas.*subFrame(:, :, 2, :)), ...
                                        uint8(inverseAlphas.*subFrame(:, :, 3, :)));
-                obj.maskedVideo(y:y+h-1, x:x+w-1, :, :) = obj.overlayMasks{k} + subFrameAlpha;
+                obj.maskedVideo(Y0:Y1, X0:X1, :, :) = overlayMask + subFrameAlpha;
             end
         end
         function addPlot(obj, xValues, yValues, historyMode, varargin)
