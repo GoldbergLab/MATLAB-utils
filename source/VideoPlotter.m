@@ -6,10 +6,16 @@ classdef VideoPlotter < handle
         overlayAlphas = {}
         areMasksStatic = []
         overlayOrigins = {}
-        xValues = {}
-        yValues = {}
+        plotXs = {}
+        plotYs = {}
         plotProperties = {}
         plotHistoryModes = {}
+        plotStartFrames = []
+        staticPlotXs = {}
+        staticPlotYs = {}
+        staticPlotProperties = {}
+        staticPlotStartFrames = []
+        staticPlotEndFrames = []
         numFrames = []
         videoWidth = []
         videoHeight = []
@@ -18,6 +24,7 @@ classdef VideoPlotter < handle
         overlayTexts = {}
         overlayTextXs = {}
         overlayTextYs = {}
+        overlayTextStartFrames = []
         overlayTextProperties = {}
     end
     methods
@@ -149,11 +156,12 @@ classdef VideoPlotter < handle
                 obj.maskedVideo(Y0:Y1, X0:X1, :, :) = overlayMask + subFrameAlpha;
             end
         end
-        function addPlot(obj, xValues, yValues, historyMode, varargin)
-            % xValues = a vector of x-values, one per video frame (except
+        function addPlot(obj, Xs, Ys, startFrame, historyMode, varargin)
+            % Xs = a vector of x-values, one per video frame (except
             %   for static plots, which may have any number of values)
-            % yValues = a vector of y-values, one per video frame (except
+            % Ys = a vector of y-values, one per video frame (except
             %   for static plots, which may have any number of values)
+            % startFrame = the frame of the video in which to start plotting
             % historyMode = how previous values should be dealt with,
             % expressed as a double from 0 to 1.
             %   0: no previous values will be plotted
@@ -162,33 +170,70 @@ classdef VideoPlotter < handle
             %   NaN: static plot - all values plotted on every frame
             % varargin = zero or more arguments of the form that the
             %   standard 'plot' function would accept.
-            if ~isnan(historyMode) && (length(xValues) ~= obj.numFrames)
-                error('Number of x-values in vector (%d) does not match the number of frames in the video (%d)', length(xValues, obj.numFrames));
-            end
-            if ~isnan(historyMode) && (length(xValues) ~= obj.numFrames)
-                error('Number of x-values in vector (%d) does not match the number of frames in the video (%d)', length(xValues, obj.numFrames));
-            end
-            if length(xValues) ~= length(yValues)
+            if length(Xs) ~= length(Ys)
                 error('Number of x and y values must be equal.');
             end
             if ~isnumeric(historyMode) || historyMode < 0 || historyMode > 1
                 error('History mode must be a double between 0 and 1, inclusive');
             end
-            obj.xValues = [obj.xValues, xValues];
-            obj.yValues = [obj.yValues, yValues];
+            if startFrame > obj.numFrames
+                warning('Static plot start frame is after the end of the video - nothing will display.');
+            end
+            obj.plotXs = [obj.plotXs, Xs];
+            obj.plotYs = [obj.plotYs, Ys];
             obj.plotProperties = [obj.plotProperties, {varargin}];
             obj.plotHistoryModes = [obj.plotHistoryModes, historyMode];
+            obj.plotStartFrames = [obj.plotStartFrames, startFrame];
         end
         function removePlot(obj, idx)
-            if idx > length(obj.xValues)
-                error('Plot index %d is out of range - there are %d plots.', idx, length(obj.xValues));
+            if idx > length(obj.plotXs)
+                error('Plot index %d is out of range - there are %d plots.', idx, length(obj.plotXs));
             end
-            obj.xValues(idx) = [];
-            obj.yValues(idx) = [];
+            obj.plotXs(idx) = [];
+            obj.plotYs(idx) = [];
             obj.plotProperties(idx) = [];
             obj.plotHistoryModes(idx) = [];
+            obj.plotStartFrames(idx) = [];
         end
-        function addText(obj, txts, xCoords, yCoords, varargin)
+        function addStaticPlot(obj, Xs, Ys, startFrame, endFrame, varargin)
+            % Xs = a vector of x-values to plot
+            % Ys = a vector of y-values to plot
+            % startFrame = the first frame of the video in which to start
+            %   plotting
+            % endFrame = the last frame of the video in which to plot. If
+            %   this is nan or an empty matrix, the plot will last until
+            %   the end of the video.
+            % varargin = zero or more arguments of the form that the
+            %   standard 'plot' function would accept.
+            if length(Xs) ~= length(Ys)
+                error('Number of x and y values must be equal.');
+            end
+            if startFrame > obj.numFrames
+                warning('Static plot start frame is after the end of the video - nothing will display.');
+            end
+            if endFrame < 1
+                warning('Static plot end frame is before the beginning of the video - nothing will display.');
+            end
+            if isempty(endFrame)
+                endFrame = nan;
+            end
+            obj.staticPlotXs = [obj.staticPlotXs, Xs];
+            obj.staticPlotYs = [obj.staticPlotYs, Ys];
+            obj.staticPlotProperties = [obj.staticPlotProperties, {varargin}];
+            obj.staticPlotStartFrames = [obj.staticPlotStartFrames, startFrame];
+            obj.staticPlotEndFrames = [obj.staticPlotEndFrames, endFrame];
+        end
+        function removeStaticPlot(obj, idx)
+            if idx > length(obj.staticPlotXs)
+                error('static plot index %d is out of range - there are %d static plots.', idx, length(obj.staticPlotXs));
+            end
+            obj.staticPlotXs(idx) = [];
+            obj.staticPlotYs(idx) = [];
+            obj.staticPlotStartFrames(idx) = [];
+            obj.staticPlotEndFrames(idx) = [];
+            obj.staticPlotProperties(idx) = [];
+        end
+        function addText(obj, txts, xCoords, yCoords, startFrame, varargin)
             % VideoPlotter.addText(txts, xCoords, yCoords)
             %   txts: A cell array of char arrays to overlay on the video,
             %       one per video frame
@@ -210,25 +255,28 @@ classdef VideoPlotter < handle
                 case 'char'
                     % User has passed in a single char array - let's duplicate
                     % it for each frame
-                    txts = repmat({txts}, 1, obj.numFrames);
+                    txts = repmat({txts}, 1, obj.numFrames - startFrame + 1);
                 case 'cell'
                     % User has passed in a cell array, hopefully with one
                     % string per frame
-                    if length(txts) ~= obj.numFrames
-                        error('If txts argument is a cell array, it must have the same length as the number of frames in the video.');
-                    end
+%                     if length(txts) ~= obj.numFrames
+%                         error('If txts argument is a cell array, it must have the same length as the number of frames in the video.');
+%                     end
                     if ~all(cellfun(@ischar, txts))
-                        error('If txts argument is a cell array, it must be a cell array of char arrays, one per video frame.');
+                        error('If txts argument is a cell array, it must be a cell array of char arrays.');
                     end
                 otherwise
                     error('txts argument must be either a char array, or a cell array of char arrays, one per video frame.');
+            end
+            if ~isnumeric(startFrame) || length(startFrame) ~= 1
+                error('startFrame should be a scalar integer.');
             end
             switch length(xCoords)
                 case 1
                     % User has passed in a single x coordinate - repeat it
                     % for each frame
-                    xCoords = repmat(xCoords, 1, obj.numFrames);
-                case obj.numFrames
+                    xCoords = repmat(xCoords, 1, obj.numFrames - startFrame + 1);
+                case obj.numFrames - startFrame + 1
                     % User has passed in one x coordinate for each frame
                 otherwise
                     error('xCoords argument must either be a scalar, or a 1D vector of x coordinates, one per video frame.');
@@ -237,8 +285,8 @@ classdef VideoPlotter < handle
                 case 1
                     % User has passed in a single y coordinate - repeat it
                     % for each frame
-                    yCoords = repmat(yCoords, 1, obj.numFrames);
-                case obj.numFrames
+                    yCoords = repmat(yCoords, 1, obj.numFrames - startFrame + 1);
+                case obj.numFrames - startFrame + 1
                     % User has passed in one y coordinate for each frame
                 otherwise
                     error('yCoords argument must either be a scalar, or a 1D vector of x coordinates, one per video frame.');
@@ -246,7 +294,18 @@ classdef VideoPlotter < handle
             obj.overlayTexts = [obj.overlayTexts, {txts}];
             obj.overlayTextXs = [obj.overlayTextXs, xCoords];
             obj.overlayTextYs = [obj.overlayTextYs, yCoords];
+            obj.overlayTextStartFrames = [obj.overlayTextStartFrames, startFrame];
             obj.overlayTextProperties = [obj.overlayTextProperties, {varargin}];
+        end
+        function removeText(obj, idx)
+            if idx > length(obj.overlayTexts)
+                error('Text overlay index %d is out of range - there are %d text overlays.', idx, length(obj.plotXs));
+            end
+            obj.overlayTexts(idx) = [];
+            obj.overlayTextXs(idx) = [];
+            obj.overlayTextYs(idx) = [];
+            obj.overlayTextStartFrames(idx) = [];
+            obj.overlayTextProperties(idx) = [];
         end
         function frame = getMaskedFrame(obj, frameNum)
             if isempty(obj.maskedVideo)
@@ -311,19 +370,20 @@ classdef VideoPlotter < handle
             obj.clearCanvas();
             hold(obj.canvas, 'on');
             obj.showFrame(obj.getMaskedFrame(frameNum));
-%             obj.canvas.XLimMode = 'manual';
-%             obj.canvas.YLimMode = 'manual';
-%            obj.freezeCanvas();
-%             for k = 1:length(obj.overlayMasks)
-%                 obj.applyMask(obj.overlayMasks{k}(:, :, :, frameNum), obj.overlayAlphas{k}(:, :, frameNum), obj.overlayOrigins{k});
-%             end
-            for k = 1:length(obj.xValues)
-                obj.applyPlot(frameNum, obj.xValues{k}, obj.yValues{k}, obj.plotHistoryModes{k}, obj.plotProperties{k});
+            for k = 1:length(obj.staticPlotXs)
+                % Apply each static plot to the canvas
+                obj.applyStaticPlot(frameNum, obj.staticPlotXs{k}, obj.staticPlotYs{k}, obj.staticPlotStartFrames(k), obj.staticPlotEndFrames(k), obj.staticPlotProperties{k});
+            end
+            for k = 1:length(obj.plotXs)
+                % Apply each dynamic plot to the canvas
+                obj.applyPlot(frameNum, obj.plotXs{k}, obj.plotYs{k}, obj.plotStartFrames(k), obj.plotHistoryModes{k}, obj.plotProperties{k});
             end
             for k = 1:length(obj.overlayTexts)
-                obj.applyText(obj.overlayTexts{k}{frameNum}, ...
-                    obj.overlayTextXs{k}(frameNum), ...
-                    obj.overlayTextYs{k}(frameNum), ...
+                % Apply each text overlay to the canvas
+                obj.applyText(frameNum, obj.overlayTexts{k}, ...
+                    obj.overlayTextXs{k}, ...
+                    obj.overlayTextYs{k}, ...
+                    obj.overlayTextStartFrames(k), ...
                     obj.overlayTextProperties{k});
             end
             frame = getframe(obj.canvas);
@@ -342,7 +402,7 @@ classdef VideoPlotter < handle
             video = uint8.empty();
             for frameNum = startFrame:endFrame
                 frameIdx = frameNum - startFrame + 1;
-                fprintf('Creating frame %d of %d...\n', frameNum-startFrame+1, endFrame-startFrame+1);
+                displayProgress('Creating frame %d of %d...\n', frameNum-startFrame+1, endFrame-startFrame+1, 10);
                 if isempty(video)
                     frame = obj.getFrame(frameNum);
                     video = zeros([size(frame), numFramesRequested], 'uint8');
@@ -360,25 +420,38 @@ classdef VideoPlotter < handle
 %             p = obj.canvas.InnerPosition;
 %             obj.canvas.InnerPosition = [p(1), p(2), p(1) + obj.videoWidth, p(2) + obj.videoHeight];
         end
-        function applyPlot(obj, frameNum, xValues, yValues, historyMode, plotProperties)
-            obj.ensureCanvas();
-            if isnan(historyMode)
-                % Static plot - plot all values on every frame
-                first = 1;
-                last = length(xValues);
-            else
-                % Non-static plot - plot all or some values up to current
-                % frame
-                first = max(1, round(frameNum - historyMode*obj.numFrames));
-                last = frameNum;
+        function applyPlot(obj, frameNum, Xs, Ys, startFrame, historyMode, plotProperties)
+            if frameNum < startFrame
+                return;
             end
-            xValueHistory = xValues(first:last);
-            yValueHistory = yValues(first:last);
+            idx = frameNum - startFrame + 1;
+            if idx > length(Xs)
+                return;
+            end
+            obj.ensureCanvas();
+            first = max(1, round(idx - historyMode * length(Xs)));
+            last = idx;
+            xValueHistory = Xs(first:last);
+            yValueHistory = Ys(first:last);
             plot(obj.canvas, xValueHistory, yValueHistory, plotProperties{:});
         end
-        function applyText(obj, txt, x, y, textProperties)
+        function applyStaticPlot(obj, frameNum, Xs, Ys, startFrame, endFrame, plotProperties)
+            if frameNum < startFrame || frameNum > endFrame
+                return;
+            end
             obj.ensureCanvas();
-            text(obj.canvas, x, y, txt, textProperties{:});
+            plot(obj.canvas, Xs, Ys, plotProperties{:});
+        end
+        function applyText(obj, frameNum, txts, Xs, Ys, startFrame, textProperties)
+            if frameNum < startFrame
+                return;
+            end
+            idx = frameNum - startFrame + 1;
+            if idx > length(txts)
+                return;
+            end
+            obj.ensureCanvas();
+            text(obj.canvas, Xs(idx), Ys(idx), txts{idx}, textProperties{:});
         end
 %         function applyMask(obj, mask, alpha, origin)
 %             obj.ensureCanvas();
