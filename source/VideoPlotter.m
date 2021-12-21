@@ -1,4 +1,6 @@
 classdef VideoPlotter < handle
+    % VideoPlotter A class for quickly and flexibly adding various types of
+    %   overlays on a video.
     properties
         video = []
         maskedVideo = []
@@ -259,9 +261,6 @@ classdef VideoPlotter < handle
                 case 'cell'
                     % User has passed in a cell array, hopefully with one
                     % string per frame
-%                     if length(txts) ~= obj.numFrames
-%                         error('If txts argument is a cell array, it must have the same length as the number of frames in the video.');
-%                     end
                     if ~all(cellfun(@ischar, txts))
                         error('If txts argument is a cell array, it must be a cell array of char arrays.');
                     end
@@ -388,8 +387,6 @@ classdef VideoPlotter < handle
             end
             frame = getframe(obj.canvas);
             frame = uint8(frame.cdata);
-%            delete(obj.canvas);
-%            delete(obj.figureCanvas);
         end
         function video = getVideoPlot(obj, startFrame, endFrame)
             if ~exist('startFrame', 'var') || isempty(startFrame)
@@ -453,12 +450,5 @@ classdef VideoPlotter < handle
             obj.ensureCanvas();
             text(obj.canvas, Xs(idx), Ys(idx), txts{idx}, textProperties{:});
         end
-%         function applyMask(obj, mask, alpha, origin)
-%             obj.ensureCanvas();
-%             x = [origin(1), origin(1) + size(mask, 2) - 1];
-%             y = [origin(2), origin(2) + size(mask, 1) - 1];
-%             im = image(x, y, mask, 'Parent', obj.canvas);
-%             set(im, 'AlphaData', alpha);
-%         end
     end
 end
