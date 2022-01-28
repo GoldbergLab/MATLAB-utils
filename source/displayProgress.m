@@ -7,6 +7,6 @@ function displayProgress(template, index, total, numUpdates)
 % total: The total number of jobs
 % numUpdates: Approximate number of updates to show.
 
-if mod(index, total/numUpdates) == 0
+if mod(index, ceil(total/numUpdates)) == 0
     fprintf(template, index, total);
 end
