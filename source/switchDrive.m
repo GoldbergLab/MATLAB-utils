@@ -12,7 +12,7 @@ function newPath = switchDrive(path, newDrive, resolve)
 % For example, 
 % switchDrive("C:\Users\Path\To\Something.txt", 'D') ==> "C:"
 % Or 'this\is\a\relative\path.txt" ==> "C:"
-if ~exist('resolveFirst', 'var') || isempty(resolve)
+if ~exist('resolve', 'var') || isempty(resolve)
     resolve = true;
 end
 if resolve
@@ -24,7 +24,7 @@ if ~strcmp(newDrive(end), ':')
     newDrive = [newDrive, ':'];
 end
 % Ensure user has not included a file separator character in the new drive
-regexprep(newDrive, filesep, '')
+newDrive = regexprep(newDrive, filesep, '');
 
 if length(newDrive) ~= 2
     error('New drive specified has more than two characters: %s\n', newDrive);

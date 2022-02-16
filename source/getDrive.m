@@ -10,7 +10,7 @@ function drive = getDrive(path, resolve)
 % For example, 
 % "C:\Users\Path\To\Something.txt" ==> "C:"
 % Or 'this\is\a\relative\path.txt" ==> "C:"
-if ~exist('resolveFirst', 'var') || isempty(resolve)
+if ~exist('resolve', 'var') || isempty(resolve)
     resolve = true;
 end
 if resolve
