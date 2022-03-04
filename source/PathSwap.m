@@ -55,6 +55,9 @@ function PathSwap_OpeningFcn(hObject, eventdata, handles, varargin)
 handles.output = 0;
 
 handles.originalPaths = varargin{1};
+if ischar(handles.originalPaths)
+    handles.originalPaths = {handles.originalPaths};
+end
 handles.alteredPaths = {};
 handles = updateOriginalPaths(handles);
 handles = updateAlteredPaths(handles);
