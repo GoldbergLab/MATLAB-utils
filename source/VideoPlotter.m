@@ -236,7 +236,7 @@ classdef VideoPlotter < handle
             obj.staticPlotProperties(idx) = [];
         end
         function addText(obj, txts, xCoords, yCoords, startFrame, varargin)
-            % VideoPlotter.addText(txts, xCoords, yCoords)
+            % VideoPlotter.addText(txts, xCoords, yCoords, startFrame, Name, Value)
             %   txts: A cell array of char arrays to overlay on the video,
             %       one per video frame
             %           or
@@ -249,10 +249,16 @@ classdef VideoPlotter < handle
             %       A single x coordinate, indicating where to put the text
             %       in every frame.
             %   yCoords: See xCoords
+            %   startFrame (optional): Frame number on which to begin
+            %       displaying text. Omit, or pass an empty array for the
+            %       default, which is 1.
             % VideoPlotter.addText(_______, Name, Value)
             %   Add object properties as name-value pairs, indicating how 
             %       to format the text, using the same properties as in the
             %       MATLAB text function.
+            if ~exist('startFrame', 'var') || isempty(startFrame)
+                startFrame = 1;
+            end
             switch class(txts)
                 case 'char'
                     % User has passed in a single char array - let's duplicate
