@@ -11,59 +11,66 @@ end
 
 verbose = true;
 
-if strcmp(ext, '.tif')
-    % Check if file is a .tif file
+try
     if verbose
-        disp('Loading as .tif file')
+        disp('Loading using fastVideoReader...');
     end
-    tiffInfo = imfinfo(videoFilename);
-    numFrames = length(tiffInfo);
-    width = tiffInfo(1).Width;
-    height = tiffInfo(1).Height;
-    videoData = zeros([height, width, numFrames]);
-    for k = 1:numFrames
-        videoData(:, :, k) = imread(videoFilename, k);
-    end
-else
-    try
+    videoData = fastVideoReader(videoFilename);
+catch
+    if strcmp(ext, '.tif')
+        % Check if file is a .tif file
         if verbose
-            disp('Loading using read method with VideoReader')
+            disp('Loading as .tif file')
         end
-        video = VideoReader(videoFilename);
-        videoData = read(video);
-    catch
+        tiffInfo = imfinfo(videoFilename);
+        numFrames = length(tiffInfo);
+        width = tiffInfo(1).Width;
+        height = tiffInfo(1).Height;
+        videoData = zeros([height, width, numFrames]);
+        for k = 1:numFrames
+            videoData(:, :, k) = imread(videoFilename, k);
+        end
+    else
         try
             if verbose
-                disp('Loading using read method with VideoReader and native option')
+                disp('Loading using read method with VideoReader')
             end
             video = VideoReader(videoFilename);
-            videoDataStruct = read(video, [1, video.NumberOfFrames], 'native');
-            videoData = zeros([size(videoDataStruct(1).cdata), length(videoDataStruct)]);
-            for k = 1:length(videoDataStruct)
-                videoData(:, :, k) = videoDataStruct(k).cdata;
-            end
+            videoData = read(video);
         catch
             try
                 if verbose
-                    disp('Loading using read method with VideoReader and native option with Inf as end frame')
+                    disp('Loading using read method with VideoReader and native option')
                 end
                 video = VideoReader(videoFilename);
-                %    disp('Attempting to load video with method #1');
-                videoDataStruct = read(video, [1, Inf], 'native');
+                videoDataStruct = read(video, [1, video.NumberOfFrames], 'native');
                 videoData = zeros([size(videoDataStruct(1).cdata), length(videoDataStruct)]);
                 for k = 1:length(videoDataStruct)
                     videoData(:, :, k) = videoDataStruct(k).cdata;
                 end
             catch
-                if verbose
-                    disp('Loading using VideoReader.readFrame and native option')
-                end
-                video = VideoReader(videoFilename);
-                videoData = zeros(video.Height, video.Width, int32(video.Duration * video.FrameRate));
-                frameNum = 1;
-                while hasFrame(video)
-                    videoData(:, :, frameNum) = video.readFrame('native').cdata;
-                    frameNum = frameNum + 1;
+                try
+                    if verbose
+                        disp('Loading using read method with VideoReader and native option with Inf as end frame')
+                    end
+                    video = VideoReader(videoFilename);
+                    %    disp('Attempting to load video with method #1');
+                    videoDataStruct = read(video, [1, Inf], 'native');
+                    videoData = zeros([size(videoDataStruct(1).cdata), length(videoDataStruct)]);
+                    for k = 1:length(videoDataStruct)
+                        videoData(:, :, k) = videoDataStruct(k).cdata;
+                    end
+                catch
+                    if verbose
+                        disp('Loading using VideoReader.readFrame and native option')
+                    end
+                    video = VideoReader(videoFilename);
+                    videoData = zeros(video.Height, video.Width, int32(video.Duration * video.FrameRate));
+                    frameNum = 1;
+                    while hasFrame(video)
+                        videoData(:, :, frameNum) = video.readFrame('native').cdata;
+                        frameNum = frameNum + 1;
+                    end
                 end
             end
         end
