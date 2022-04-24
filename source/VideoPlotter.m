@@ -13,11 +13,9 @@ classdef VideoPlotter < handle
         plotProperties = {}
         plotHistoryModes = {}
         plotStartFrames = []
-        staticPlotXs = {}
-        staticPlotYs = {}
-        staticPlotProperties = {}
-        staticPlotStartFrames = []
-        staticPlotEndFrames = []
+        plotEndFrames = []
+        plotTypes = {}
+        plotParams = {}
         numFrames = []
         videoWidth = []
         videoHeight = []
@@ -158,6 +156,37 @@ classdef VideoPlotter < handle
                 obj.maskedVideo(Y0:Y1, X0:X1, :, :) = overlayMask + subFrameAlpha;
             end
         end
+        function addScrollingPlot(obj, Ys, offset, rate, width, varargin)
+            % Rate is the number of samples to scroll per frame
+            % Width is the width of the scrolling window in samples
+            % Offset is the number of samples after the beginning of the
+            %   plot data when the video starts.
+            if ~exist('offset', 'var') || isempty(offset)
+                offset = 0;
+            end
+            if ~exist('rate', 'var') || isempty(rate)
+                rate = 1;
+            end
+            if ~exist('width', 'var') || isempty(width)
+                width = 1000;
+            end
+            if ~isnumeric(width) || width < 0
+                error('Width must be a positive number.');
+            end
+            if ~isnumeric(rate) || width < 0
+                error('Rate must be a positive number.');
+            end
+            
+            params.offset = offset;
+            params.width = width;
+            params.rate = rate;
+            
+            obj.plotXs = [obj.plotXs, {[]}];
+            obj.plotYs = [obj.plotYs, Ys];
+            obj.plotProperties = [obj.plotProperties, {varargin}];
+            obj.plotTypes = [obj.plotTypes, 'scrolling'];
+            obj.plotParams = [obj.plotParams, params];
+        end
         function addPlot(obj, Xs, Ys, startFrame, historyMode, varargin)
             % Xs = a vector of x-values, one per video frame (except
             %   for static plots, which may have any number of values)
@@ -181,21 +210,15 @@ classdef VideoPlotter < handle
             if startFrame > obj.numFrames
                 warning('Static plot start frame is after the end of the video - nothing will display.');
             end
+            
+            params.startFrame = startFrame;
+            params.historyMode = historyMode;
+            
             obj.plotXs = [obj.plotXs, Xs];
             obj.plotYs = [obj.plotYs, Ys];
             obj.plotProperties = [obj.plotProperties, {varargin}];
-            obj.plotHistoryModes = [obj.plotHistoryModes, historyMode];
-            obj.plotStartFrames = [obj.plotStartFrames, startFrame];
-        end
-        function removePlot(obj, idx)
-            if idx > length(obj.plotXs)
-                error('Plot index %d is out of range - there are %d plots.', idx, length(obj.plotXs));
-            end
-            obj.plotXs(idx) = [];
-            obj.plotYs(idx) = [];
-            obj.plotProperties(idx) = [];
-            obj.plotHistoryModes(idx) = [];
-            obj.plotStartFrames(idx) = [];
+            obj.plotTypes = [obj.plotTypes, 'normal'];
+            obj.plotParams = [obj.plotParams, params];
         end
         function addStaticPlot(obj, Xs, Ys, startFrame, endFrame, varargin)
             % Xs = a vector of x-values to plot
@@ -219,21 +242,25 @@ classdef VideoPlotter < handle
             if isempty(endFrame)
                 endFrame = nan;
             end
-            obj.staticPlotXs = [obj.staticPlotXs, Xs];
-            obj.staticPlotYs = [obj.staticPlotYs, Ys];
-            obj.staticPlotProperties = [obj.staticPlotProperties, {varargin}];
-            obj.staticPlotStartFrames = [obj.staticPlotStartFrames, startFrame];
-            obj.staticPlotEndFrames = [obj.staticPlotEndFrames, endFrame];
+            
+            params.startFrame = startFrame;
+            params.endFrame = endFrame;
+            
+            obj.plotXs = [obj.plotXs, Xs];
+            obj.plotYs = [obj.plotYs, Ys];
+            obj.plotProperties = [obj.plotProperties, {varargin}];
+            obj.plotTypes = [obj.plotTypes, 'static'];
+            obj.plotParams = [obj.plotParams, params];
         end
-        function removeStaticPlot(obj, idx)
-            if idx > length(obj.staticPlotXs)
-                error('static plot index %d is out of range - there are %d static plots.', idx, length(obj.staticPlotXs));
+        function removePlot(obj, idx)
+            if idx > length(obj.plotXs)
+                error('Plot index %d is out of range - there are %d plots.', idx, length(obj.plotXs));
             end
-            obj.staticPlotXs(idx) = [];
-            obj.staticPlotYs(idx) = [];
-            obj.staticPlotStartFrames(idx) = [];
-            obj.staticPlotEndFrames(idx) = [];
-            obj.staticPlotProperties(idx) = [];
+            obj.plotXs(idx) = [];
+            obj.plotYs(idx) = [];
+            obj.plotProperties(idx) = [];
+            obj.plotTypes(idx) = [];
+            obj.plotParams(idx) = [];
         end
         function addText(obj, txts, xCoords, yCoords, startFrame, varargin)
             % VideoPlotter.addText(txts, xCoords, yCoords, startFrame, Name, Value)
@@ -375,13 +402,17 @@ classdef VideoPlotter < handle
             obj.clearCanvas();
             hold(obj.canvas, 'on');
             obj.showFrame(obj.getMaskedFrame(frameNum));
-            for k = 1:length(obj.staticPlotXs)
-                % Apply each static plot to the canvas
-                obj.applyStaticPlot(frameNum, obj.staticPlotXs{k}, obj.staticPlotYs{k}, obj.staticPlotStartFrames(k), obj.staticPlotEndFrames(k), obj.staticPlotProperties{k});
-            end
             for k = 1:length(obj.plotXs)
-                % Apply each dynamic plot to the canvas
-                obj.applyPlot(frameNum, obj.plotXs{k}, obj.plotYs{k}, obj.plotStartFrames(k), obj.plotHistoryModes{k}, obj.plotProperties{k});
+                switch obj.plotTypes{k}
+                    case 'normal'
+                        % Apply this dynamic plot to the canvas
+                        obj.applyPlot(frameNum, obj.plotXs{k}, obj.plotYs{k}, obj.plotParams{k}.startFrame, obj.plotParams{k}.historyMode, obj.plotProperties{k});
+                    case 'static'
+                        % Apply each static plot to the canvas
+                        obj.applyStaticPlot(frameNum, obj.plotXs{k}, obj.plotYs{k}, obj.plotParams{k}.startFrame, obj.plotParams{k}.endFrame, obj.plotProperties{k});
+                    case 'scrolling'
+                        obj.applyScrollingPlot(frameNum, obj.plotYs{k}, obj.plotParams{k}.offset, obj.plotParams{k}.rate, obj.plotParams{k}.width, obj.plotProperties{k});
+                end
             end
             for k = 1:length(obj.overlayTexts)
                 % Apply each text overlay to the canvas
@@ -393,6 +424,7 @@ classdef VideoPlotter < handle
             end
             frame = getframe(obj.canvas);
             frame = uint8(frame.cdata);
+%             frame = print2array(obj.canvas);
         end
         function video = getVideoPlot(obj, startFrame, endFrame)
             if ~exist('startFrame', 'var') || isempty(startFrame)
@@ -437,6 +469,27 @@ classdef VideoPlotter < handle
             xValueHistory = Xs(first:last);
             yValueHistory = Ys(first:last);
             plot(obj.canvas, xValueHistory, yValueHistory, plotProperties{:});
+        end
+        function applyScrollingPlot(obj, frameNum, Ys, offset, rate, width, plotProperties)
+            obj.ensureCanvas();
+            N = length(Ys);
+            % Construct a Y vector representing a window into the full Y
+            % vector
+            middleSample = round(frameNum * rate + offset);
+            first = floor(middleSample - width/2);
+            last = ceil(middleSample + width/2);
+            Ys = Ys(max(first, 1):min(last, N));
+            if first < 1
+                Ys = padarray(Ys, 1 - first, NaN, 'pre');
+            end
+            if last > N
+                Ys = padarray(Ys, last - N, NaN, 'post');
+            end
+            % Create an X vector that spaces out the plot across the axes
+            xlimits = xlim(obj.canvas);
+            Xs = linspace(xlimits(1), xlimits(2), length(Ys));
+            % Plot the data
+            plot(obj.canvas, Xs, Ys, plotProperties{:});
         end
         function applyStaticPlot(obj, frameNum, Xs, Ys, startFrame, endFrame, plotProperties)
             if frameNum < startFrame || frameNum > endFrame
