@@ -52,7 +52,7 @@ end
 if ~exist('clim', 'var') || isempty(clim)
     clim = [12.5, 28];
 end
-if ~exist('tlim', 'var' || isempty(tlim)
+if ~exist('tlim', 'var') || isempty(tlim)
     tlim = round(length(audio) / windowSize);
 end
 
@@ -78,7 +78,8 @@ end
 
 %Compute the spectrogram
 %[S,F,T,P] = spectrogram(sss,windowSize,windowOverlap,NFFT,Fs);
-[S,F,~] = specgram(audio, NFFT, samplingRate, windowSize, windowOverlap);
+% [S,F,~] = specgram(audio, NFFT, samplingRate, windowSize, windowOverlap);
+[S,F,~] = spectrogram(audio, windowSize, windowOverlap, NFFT, samplingRate);
 
 freqInRange = (F>=flim(1)) & (F<=flim(2));
 
