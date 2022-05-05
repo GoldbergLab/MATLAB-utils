@@ -54,7 +54,7 @@ end
 for variableNum = 1:numel(variablesShared)
     variable = variablesShared{variableNum};
     for rowNum = 1:numRowsMin
-        if ~isequal(tableA.(variable)(rowNum), tableB.(variable)(rowNum))
+        if ~isequaln(tableA.(variable)(rowNum), tableB.(variable)(rowNum))
             diffs = updateDiffs(diffs, variable, rowNum);
         end
     end
