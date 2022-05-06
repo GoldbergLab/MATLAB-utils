@@ -21,8 +21,15 @@ function setTreeNodeIndex(node, newIndex)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% Get list of child nodes, which should include the node in question
 siblings = node.Parent.Children;
+% Remove the node in question from the list of siblings
 siblings(siblings == node) = [];
+if isempty(siblings)
+    % There are no other nodes, just the node to be moved, so there's
+    % nothing to do.
+    return
+end
 if newIndex > length(siblings)
     newIndex = length(siblings);
     direction = 'after';
