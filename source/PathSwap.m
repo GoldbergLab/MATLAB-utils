@@ -22,7 +22,7 @@ function varargout = PathSwap(varargin)
 
 % Edit the above text to modify the response to help PathSwap
 
-% Last Modified by GUIDE v2.5 02-Mar-2022 14:13:45
+% Last Modified by GUIDE v2.5 08-Jun-2022 17:29:50
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -54,11 +54,25 @@ function PathSwap_OpeningFcn(hObject, eventdata, handles, varargin)
 % Choose default command line output for PathSwap
 handles.output = 0;
 
+if isempty(varargin)
+    msgbox('PathSwap must be called with a cell array of paths to switch drive letters for.', 'Incorrect number of arguments');
+    delete(hObject);
+end
+
+handles.alteredPaths = {};
+
 handles.originalPaths = varargin{1};
 if ischar(handles.originalPaths)
     handles.originalPaths = {handles.originalPaths};
 end
-handles.alteredPaths = {};
+
+if length(varargin) >= 2
+    handles.searchStringEdit.String = varargin{2};
+end
+if length(varargin) >= 3
+    handles.replaceStringEdit.String = varargin{3};
+end
+
 handles = updateOriginalPaths(handles);
 handles = updateAlteredPaths(handles);
 
@@ -78,8 +92,26 @@ for k = 1:length(handles.originalPaths)
 end
 handles.alteredText.String = handles.alteredPaths;
 
-function alteredPath = swapPath(originalPath, searchString, replaceString)
-alteredPath = strrep(originalPath, searchString, replaceString);
+function alteredPath = swapPath(originalPath, searchStrings, replaceStrings)
+if ischar(searchStrings)
+    searchStrings = charMatrixToCell(searchStrings);
+end
+if ischar(replaceStrings)
+    replaceStrings = charMatrixToCell(replaceStrings);
+end
+
+alteredPath = originalPath;
+for k = 1:min(length(searchStrings), length(replaceStrings))
+    searchString = searchStrings{k};
+    replaceString = replaceStrings{k};
+    alteredPath = strrep(alteredPath, searchString, replaceString);
+end
+
+function cellText = charMatrixToCell(charMatrix)
+cellText = {};
+for k = 1:size(charMatrix, 1)
+    cellText{end+1} = charMatrix(k, :);
+end
 
 % --- Outputs from this function are returned to the command line.
 function varargout = PathSwap_OutputFcn(hObject, eventdata, handles) 
@@ -177,3 +209,24 @@ if isequal(get(hObject, 'waitstatus'), 'waiting')
 else
     delete(hObject);
 end
+
+
+% --- Executes on key press with focus on figure1 or any of its controls.
+function figure1_WindowKeyPressFcn(hObject, eventdata, handles)
+% hObject    handle to figure1 (see GCBO)
+% eventdata  structure with the following fields (see MATLAB.UI.FIGURE)
+%	Key: name of the key that was pressed, in lower case
+%	Character: character interpretation of the key(s) that was pressed
+%	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on key press with focus on searchStringEdit and none of its controls.
+function searchStringEdit_KeyPressFcn(hObject, eventdata, handles)
+% hObject    handle to searchStringEdit (see GCBO)
+% eventdata  structure with the following fields (see MATLAB.UI.CONTROL.UICONTROL)
+%	Key: name of the key that was pressed, in lower case
+%	Character: character interpretation of the key(s) that was pressed
+%	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
+% handles    structure with handles and user data (see GUIDATA)
+disp(eventdata)
