@@ -7,7 +7,7 @@ if ~exist('offerSwap', 'var') || isempty(offerSwap)
     offerSwap = true;
 end
 
-alteredPaths = {};
+alteredPaths = cell(size(paths));
 swappableIdx = [];
 
 for k = 1:length(paths)
@@ -22,7 +22,7 @@ for k = 1:length(paths)
             end
         end
     end
-    alteredPaths{end+1} = path;
+    alteredPaths{k} = path;
     if offerSwap
         if ~exist(path, 'file')
             swappableIdx(end+1) = k;
@@ -30,7 +30,7 @@ for k = 1:length(paths)
     end
 end
 
-if offerSwap
+if offerSwap && ~isempty(swappableIdx)
     answer = questdlg('Some paths cannot be resolved - would you like to try swapping the file roots?', 'Swap file roots?', 'Yes', 'No', 'Yes');
     if strcmp(answer, 'Yes')
         alteredPaths(swappableIdx) = RootSwap(alteredPaths(swappableIdx));
