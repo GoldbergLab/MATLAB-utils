@@ -67,7 +67,7 @@ for k = 1:length(paths)
     end
     alteredPaths{k} = path;
     if offerSwap
-        if ~exist(path, 'file')
+        if ~isempty(path) && ~exist(path, 'file')
             % If this file doesn't exist, and the user wants an opportunity
             %   to swap drive roots, add this to a list to be swapped.
             swappableIdx(end+1) = k;
