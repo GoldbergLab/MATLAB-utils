@@ -48,7 +48,7 @@ end
 % Plot true values
 scatter3(ax, x, y, z, varargin{:}); 
 
-% Make axes use the same 
+% Make axes use the same unit sizes, and freeze them for 3D viewing
 axis(ax, 'equal');
 axis(ax, 'vis3d');
 
