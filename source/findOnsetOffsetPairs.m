@@ -33,8 +33,8 @@ end
 if isempty(signalMask)
     minFrame = min(signalOnSamples);
     maxFrame = max(signalOnSamples);
-    signalMask = false(1, maxFrame - minFrame + 1);
-    signalMask(signalOnSamples - minFrame + 1) = true;
+    signalMask = false(1, maxFrame+1);
+    signalMask(signalOnSamples) = true;
 else
     minFrame = 1;
     maxFrame = length(signalMask);
