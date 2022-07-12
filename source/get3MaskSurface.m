@@ -46,5 +46,5 @@ n = convn(cropped_mask, kernel, 'same');
 cropped_surface_mask = cropped_mask & (n < sum(kernel, 'all'));
 
 % Reconstitute surface mask into full size of original mask.
-surface_mask = zeros(size(mask));
+surface_mask = false(size(mask));
 surface_mask(xlimits(1):xlimits(2), ylimits(1):ylimits(2), zlimits(1):zlimits(2)) = cropped_surface_mask;
