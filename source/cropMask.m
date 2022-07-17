@@ -1,12 +1,12 @@
-function [cropped_mask, xlimits, ylimits, zlimits] = crop3Mask(mask, pad)
+function [cropped_mask, xlimits, ylimits] = cropMask(mask, pad)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% crop3Mask: Crop the 3D mask to the bounding box containing true values
-% usage:  cropped_mask = crop3Mask(mask)
-%         [cropped_mask, xlimits, ylimits, zlimits] = crop3Mask(mask)
+% cropMask: Crop the 2D mask to the bounding box containing true values
+% usage:  cropped_mask = cropMask(mask)
+%         [cropped_mask, xlimits, ylimits, zlimits] = cropMask(mask)
 %
 % where,
-%    mask is a 3D logical array
-%    cropped_mask is a 3D logical array containing only the smallest region 
+%    mask is a 2D logical array
+%    cropped_mask is a 2D logical array containing only the smallest region 
 %       of "mask" hat contains true values
 %    xlimits is a 1x2 vector containing the minimum and maximum x
 %       coordinates of true values within the mask.
@@ -35,9 +35,9 @@ end
 
 % Find the minimum and maximum coordinates for the true values along each
 % axis.
-[xlimits, ylimits, zlimits] = get3MaskLim(mask);
+[xlimits, ylimits] = getMaskLim(mask);
 
-if isempty(xlimits) || isempty(ylimits) || isempty(zlimits)
+if isempty(xlimits) || isempty(ylimits)
     cropped_mask = [];
     return 
 end
@@ -46,15 +46,12 @@ if pad ~= 0
     % Pad limits
     xlimits = xlimits + [-pad, pad];
     ylimits = ylimits + [-pad, pad];
-    zlimits = zlimits + [-pad, pad];
 
     % Ensure limits do not exceed boundaries of mask
     xlimits(1) = max(1, xlimits(1));
     ylimits(1) = max(1, ylimits(1));
-    zlimits(1) = max(1, zlimits(1));
     xlimits(2) = min(size(mask, 1), xlimits(2));
     ylimits(2) = min(size(mask, 2), ylimits(2));
-    zlimits(2) = min(size(mask, 3), zlimits(2));
 end
 
-cropped_mask = mask(xlimits(1):xlimits(2), ylimits(1):ylimits(2), zlimits(1):zlimits(2));
+cropped_mask = mask(xlimits(1):xlimits(2), ylimits(1):ylimits(2));
