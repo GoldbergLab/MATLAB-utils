@@ -51,7 +51,11 @@ while true
     inBoundsNeighborMask = all(neighborsXY > [0, 0], 2) & all(neighborsXY <= size(mask), 2);
     neighborsXY = neighborsXY(inBoundsNeighborMask, :);
     neighborhoodNorm = neighborhoodNorm(inBoundsNeighborMask, :);
-    validNeighborMask = cget(mask, neighborsXY(:, 1), neighborsXY(:, 2));
+    %validNeighborMask = cget(mask, neighborsXY(:, 1), neighborsXY(:, 2));
+    validNeighborMask = false([1, size(neighborsXY, 1)]);
+    for k = 1:size(neighborsXY, 1)
+        validNeighborMask(k) = mask(neighborsXY(k, 1), neighborsXY(k, 2));
+    end
     if sum(validNeighborMask) == 0
         % No valid neighbors left - we're done.
         break;
