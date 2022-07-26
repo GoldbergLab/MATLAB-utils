@@ -1,7 +1,7 @@
 function [xlimits, ylimits] = getMaskLim(mask)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% get3MaskLim: Get the smallest bounding box containing all true values
-% usage:  [xlimits, ylimits, zlimits] = get3MaskLim(mask)
+% getMaskLim: Get the smallest bounding box containing all true values
+% usage:  [xlimits, ylimits] = getMaskLim(mask)
 %
 % where,
 %    mask is a 2D logical array
@@ -12,11 +12,11 @@ function [xlimits, ylimits] = getMaskLim(mask)
 %    zlimits is a 1x2 vector containing the minimum and maximum z
 %       coordinates of true values within the mask.
 %
-% <long description>
+% Get the smallest bounding box containing all true values
 %
-% See also: <related functions>
+% See also: cropMask, plotMask, get3MaskLim
 %
-% Version: <version>
+% Version: 1.0
 % Author:  Brian Kardon
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
