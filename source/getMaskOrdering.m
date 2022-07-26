@@ -26,12 +26,10 @@ neighborhoodX = [1, 1, 1, 0, -1, -1, -1, 0];
 neighborhoodY = [-1, 0, 1, 1, 1, 0, -1, -1];
 neighborhood = [neighborhoodX', neighborhoodY'];
 neighborhoodNorm = neighborhood ./ sqrt(sum(neighborhood .* neighborhood, 2));
-[x, y] = ind2sub(size(mask), find(mask));
-indices = sub2ind(size(mask), x, y);
-indexArray = cset(nan(size(mask)), indices, x, y);
 
 if ~exist('startXY', 'var') || isempty(startXY)
-    startXY = [x(1), y(1)];
+    [x, y] = ind2sub(size(mask), find(mask, 1));
+    startXY = [x, y];
 end
 if ~exist('startDXDY', 'var') || isempty(startDXDY)
     startDXDY = [1, 0];
@@ -47,23 +45,27 @@ while true
     xOrdered = [xOrdered, xy(1)];
     yOrdered = [yOrdered, xy(2)];
     dxdy = xy - lastXY;
-    neighborsXY = xy + neighborhood;
-    inBoundsNeighborMask = all(neighborsXY > [0, 0], 2) & all(neighborsXY <= size(mask), 2);
-    neighborsXY = neighborsXY(inBoundsNeighborMask, :);
-    neighborhoodNorm = neighborhoodNorm(inBoundsNeighborMask, :);
-    %validNeighborMask = cget(mask, neighborsXY(:, 1), neighborsXY(:, 2));
-    validNeighborMask = false([1, size(neighborsXY, 1)]);
-    for k = 1:size(neighborsXY, 1)
-        validNeighborMask(k) = mask(neighborsXY(k, 1), neighborsXY(k, 2));
+    
+    % Sort neighborhood by how straight each will make the path be
+    [~, straightestPathSortIdx] = sort(sum(dxdy .* neighborhoodNorm, 2), 'descend');
+    
+    found_neighbor = false;
+    for idx = straightestPathSortIdx'
+        neighborXY = xy + neighborhood(idx, :);
+        % Check if neighbor is a member of the set, and in bounds
+        if mask(neighborXY(1), neighborXY(2)) && all(neighborXY > [0, 0]) && all(neighborXY <= size(mask))
+            % Remove current pixel from set to prevent backtracking
+            mask(xy(1), xy(2)) = false;
+            % Record current pixel as last pixel
+            lastXY = xy;
+            % Record selected neigbor as new current pixelZ
+            xy = neighborXY;
+            found_neighbor = true;
+            break;
+        end
     end
-    if sum(validNeighborMask) == 0
-        % No valid neighbors left - we're done.
+    if ~found_neighbor
+        % Ran out of path to order - we're done.
         break;
     end
-    validNeighborsXY = neighborsXY(validNeighborMask, :);
-    validNeighborhoodNorm = neighborhoodNorm(validNeighborMask, :);
-    [~, straightestIdx] = max(sum(dxdy .* validNeighborhoodNorm, 2));
-    mask(xy(1), xy(2)) = false;
-    lastXY = xy;
-    xy = validNeighborsXY(straightestIdx, :);
 end
