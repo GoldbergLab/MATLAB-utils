@@ -40,8 +40,8 @@ else
     maxFrame = length(signalMask);
 end
 
-onsets = find(diff(signalMask)>0)+minFrame;
-offsets = find(diff(signalMask)<0)+minFrame-1;
+onsets = find(diff(signalMask)>0)+1;
+offsets = find(diff(signalMask)<0);
 
 % Handle pulses that start at (or before) the first frame
 if min(offsets) < min(onsets)
