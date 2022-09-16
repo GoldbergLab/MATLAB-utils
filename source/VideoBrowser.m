@@ -15,8 +15,8 @@ classdef VideoBrowser < handle
         NavigationAxes      matlab.graphics.axis.Axes   % Axes for displaying the 1D metric
     end
     properties (SetObservable)
-        VideoData = []                  % The video data itself, a n x h x w double or uint8 array,
-        NavigationData = []             % The 1D navigational data, a 1 x n array
+        VideoData = []                  % The video data itself, a N x H x W double or uint8 array,
+        NavigationData = []             % The 1D navigational data, a 1 x N array
         NavigationDataFunction = []     % A function handle that takes video data as an argument, and returns navigation data
         NavigationColor = []            % A color specification for the navigation data. See the color argument in the scatter function.
         CurrentFrameNum = 1             % An integer representing the current frame number
@@ -28,12 +28,19 @@ classdef VideoBrowser < handle
             %       the number of frames, H and W are the height and width
             %       of each frame
             %   NavigationDataOrFcn = either
-            %       A 1 x N array, to be plotted in the NavigationAxes
-            %       A function handle which takes N x H x W VideoData array
-            %           as an argument and returns a 1 x N array as a
+            %       1. A 1 x N array, to be plotted in the NavigationAxes
+            %       2. A function handle which takes N x H x W VideoData 
+            %           array as an argument and returns a 1 x N array as a
             %           result, to be plotted in the NavigationAxes
-            %       An empty array, which results in blank NavigationAxes
-            %       Omitted, which results in blank NavigationAxes
+            %       4. A string referring to one of the predefined
+            %           functions:
+            %           - 'sum' - plot sum of pixel values in each frame
+            %           - 'diff' - plot change in total pixel values in
+            %               each frame
+            %           - 'compactness' - plot measure of how compact the
+            %               blobs of pixel values are
+            %       3. An empty array, or omitted, which results in blank 
+            %           NavigationAxes
             %   NavigationColor = a color specification for the points in
             %       the NavigationAxes scatter plot. See the color argument
             %       for the scatter function for documentation.
@@ -62,6 +69,12 @@ classdef VideoBrowser < handle
                         case 'sum'
                             obj.NavigationData = [];
                             obj.NavigationDataFunction = @(videoData)sum(videoData, [2, 3]);
+                        case 'diff'
+                            obj.NavigationData = [];
+                            obj.NavigationDataFunction = @(videoData)smooth(sum(diff(videoData, 1), [2, 3]), 10);
+                        case 'compactness'
+                            obj.NavigationData = [];
+                            obj.NavigationDataFunction = @(videoData)sum(videoData, [2, 3]) ./ sum(getMaskSurface(videoData), [2, 3]);
                         otherwise
                             error('Unrecognized named navigation data function: %s.', NavigationDataOrFcn);
                     end
@@ -75,6 +88,11 @@ classdef VideoBrowser < handle
         end
         function createDisplayArea(obj)
             % Create & prepare the graphics containers (the figure & axes)
+            
+            % Delete graphics containers in case they already exist
+            delete(obj.MainFigure)
+            delete(obj.VideoAxes)
+            delete(obj.NavigationAxes)
             
             % Create graphics containers
             obj.MainFigure =     figure('Units', 'normalized');
@@ -162,9 +180,9 @@ classdef VideoBrowser < handle
                 obj.FrameMarker.XData = [x, x];
             end
             if isempty(obj.FrameNumberMarker) || ~isvalid(obj.FrameNumberMarker)
-                obj.FrameNumberMarker = text(obj.NavigationAxes, x, mean(obj.NavigationAxes.YLim), num2str(x));
+                obj.FrameNumberMarker = text(obj.NavigationAxes, x + 20, mean(obj.NavigationAxes.YLim), num2str(x));
             else
-                obj.FrameNumberMarker.Position(1) = x;
+                obj.FrameNumberMarker.Position(1) = x + 20;
                 obj.FrameNumberMarker.String = num2str(x);
             end
         end
