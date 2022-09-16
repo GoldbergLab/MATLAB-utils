@@ -15,13 +15,14 @@ classdef VideoBrowser < handle
     %       100 frames
     %     control-g =                jump to a specific frame number
     %
-    properties (Access = public)
-        VideoFrame                                          % An image object containing the video frame image
-        FrameMarker         matlab.graphics.primitive.Line  % A line on the NavigationAxes marking what frame is displayed
-        FrameNumberMarker   matlab.graphics.primitive.Text  % Text on the NavigationAxes indicating what frame number is displayed
-        PlayJob             timer                           % A timer for playing the video
-        PlayIncrement       double = 1                      % Number of frames the play timer will advance by on each call.
-        NumColorChannels    double                          % Number of color channels in the video (1 for grayscale, 3 for color)
+    properties (Access = private)
+        VideoFrame              matlab.graphics.primitive.Image % An image object containing the video frame image
+        FrameMarker             matlab.graphics.primitive.Line  % A line on the NavigationAxes marking what frame is displayed
+        FrameNumberMarker       matlab.graphics.primitive.Text  % Text on the NavigationAxes indicating what frame number is displayed
+        PlayJob                 timer                           % A timer for playing the video
+        PlayIncrement           double = 1                      % Number of frames the play timer will advance by on each call.
+        NumColorChannels        double                          % Number of color channels in the video (1 for grayscale, 3 for color)
+        NavigationRedrawEnable  logical = false                 % Enable or disable navigation redraw
     end
     properties
         MainFigure          matlab.ui.Figure            % The main figure window
@@ -35,9 +36,10 @@ classdef VideoBrowser < handle
         NavigationColor = []            % A color specification for the navigation data. See the color argument in the scatter function.
         CurrentFrameNum = 1             % An integer representing the current frame number
         PlaybackSpeed = 25              % Playback speed in fps
+        Colormap = colormap()           % Colormap for NavigationAxes
     end
     methods
-        function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor)
+        function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap)
             % Construct a new VideoBrowser object.
             %   VideoData = a N x H x W double or uint8 array, where N =
             %       the number of frames, H and W are the height and width
@@ -71,6 +73,9 @@ classdef VideoBrowser < handle
             if ~exist('NavigationColor', 'var') || isempty(NavigationColor)
                 NavigationColor = 'black';
             end
+            if ~exist('NavigationColormap', 'var') || isempty(NavigationColormap)
+                NavigationColormap = colormap();
+            end
 
             obj.createDisplayArea();
 
@@ -85,6 +90,11 @@ classdef VideoBrowser < handle
             
             obj.VideoData = VideoData;
 
+            % Temporarily disable drawing navigation to prevent all the
+            % setters from triggering a redraw multiple times
+            obj.NavigationRedrawEnable = false;
+            
+            obj.Colormap = NavigationColormap;
             obj.NavigationColor = NavigationColor;
             switch class(NavigationDataOrFcn)
                 case 'function_handle'
@@ -118,7 +128,9 @@ classdef VideoBrowser < handle
                 otherwise
                     error('NavigationDataOrFcn argument must be of type function_handle, char, double, or uint8, not %s.', class(NavigationDataOrFcn));
             end
-            
+            obj.NavigationRedrawEnable = true;
+            obj.drawNavigationData();
+
         end
         function playVideo(obj)
             warning('off', 'MATLAB:TIMER:RATEPRECISION');
@@ -244,6 +256,10 @@ classdef VideoBrowser < handle
             %   NavigationDataFunction is provide, it will be used here to
             %   generate NavigationData
             
+            if ~obj.NavigationRedrawEnable
+                return;
+            end
+            
             if isempty(obj.NavigationData)
                 if isempty(obj.NavigationDataFunction)
                     % No navigation data or a function to create it.
@@ -262,10 +278,9 @@ classdef VideoBrowser < handle
                 navigationData = obj.NavigationData;
             end
             obj.clearNavigationData();
-            
-            obj.NavigationAxes
             p = plot([1, length(navigationData)], obj.NavigationAxes.YLim);
             delete(p);
+            obj.NavigationAxes.Colormap = obj.Colormap;
             linec(1:length(navigationData), navigationData, 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
 %             scatter(1:length(navigationData), navigationData, 1, obj.NavigationColor, '.', 'Parent', obj.NavigationAxes);
             obj.NavigationAxes.XLim = [1, length(navigationData)];
@@ -297,7 +312,7 @@ classdef VideoBrowser < handle
             end
             x = obj.CurrentFrameNum;
             if isempty(obj.FrameMarker) || ~isvalid(obj.FrameMarker)
-                obj.FrameMarker = line([x, x], obj.NavigationAxes.YLim, 'Parent', obj.NavigationAxes);
+                obj.FrameMarker = line([x, x], obj.NavigationAxes.YLim, 'Parent', obj.NavigationAxes, 'Color', 'black');
             else
                 obj.FrameMarker.XData = [x, x];
             end
@@ -352,6 +367,10 @@ classdef VideoBrowser < handle
                 obj.stopVideo();
                 obj.playVideo();
             end
+        end
+        function set.Colormap(obj, colormap)
+            obj.Colormap = colormap;
+            obj.drawNavigationData();
         end
         function inside = inNavigationAxes(obj, x, y)
             % Determine if the given figure coordinates fall within the

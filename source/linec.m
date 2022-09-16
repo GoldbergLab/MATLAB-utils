@@ -44,6 +44,9 @@ if isempty(parentIdx)
 else
     parent = varargin{parentIdx + 1};
     varargin(parentIdx:parentIdx+1) = [];
+    if ~isvalid(parent)
+        parent = gca();
+    end
 end
 
 colorIdx = find(strcmp(varargin, 'Color'));
@@ -109,6 +112,8 @@ else
         else
             error('Color argument must be a color name, RGB triplet, RGB Nx3 array, or 1xN array of palette indices.');
         end
+    else
+        error('Unrecognized class for Color argument: %s', class(color));
     end
 end
 
