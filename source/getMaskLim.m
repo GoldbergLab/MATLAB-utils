@@ -4,12 +4,14 @@ function [xlimits, ylimits] = getMaskLim(mask, pad)
 % usage:  [xlimits, ylimits] = getMaskLim(mask)
 %
 % where,
-%    mask is a 2D logical array
+%    mask is either
+%       - a 2D logical array
+%       - a 3D (N x H x W) stack of 2D logical arrays
+%       If a stack of masks is provided, the smallest xlimits and ylimits
+%       that enclose every true value in every slice is found.
 %    xlimits is a 1x2 vector containing the minimum and maximum x
 %       coordinates of true values within the mask.
 %    ylimits is a 1x2 vector containing the minimum and maximum y
-%       coordinates of true values within the mask.
-%    zlimits is a 1x2 vector containing the minimum and maximum z
 %       coordinates of true values within the mask.
 %    pad is an optional integer indicating how much extra mask to take
 %       around the edge of the true region. If the padding overlaps the 
@@ -32,7 +34,11 @@ if ~exist('pad', 'var') || isempty(pad)
     pad = 0;
 end
 
-% Generate 3D coordinate index lists based on the flattened 1D indices of 
+if ndims(mask) == 3
+    mask = squeeze(any(mask, 1));
+end
+
+% Generate 2D coordinate index lists based on the flattened 1D indices of 
 % the true values
 [x, y] = ind2sub(size(mask), find(mask > 0));
 
