@@ -64,6 +64,8 @@ classdef VideoBrowser < handle
             %       the NavigationAxes scatter plot. See the color argument
             %       for the scatter function for documentation.
             
+            obj.createDisplayArea();
+
             if ~exist('VideoData', 'var') || isempty(VideoData)
                 VideoData = [];
             end
@@ -74,10 +76,8 @@ classdef VideoBrowser < handle
                 NavigationColor = 'black';
             end
             if ~exist('NavigationColormap', 'var') || isempty(NavigationColormap)
-                NavigationColormap = colormap();
+                NavigationColormap = colormap(obj.NavigationAxes);
             end
-
-            obj.createDisplayArea();
 
             if length(size(VideoData)) == 4
                 if size(VideoData, 4) ~= 3
@@ -278,7 +278,7 @@ classdef VideoBrowser < handle
                 navigationData = obj.NavigationData;
             end
             obj.clearNavigationData();
-            p = plot([1, length(navigationData)], obj.NavigationAxes.YLim);
+            p = plot(obj.NavigationAxes, [1, length(navigationData)], obj.NavigationAxes.YLim);
             delete(p);
             obj.NavigationAxes.Colormap = obj.Colormap;
             linec(1:length(navigationData), navigationData, 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
