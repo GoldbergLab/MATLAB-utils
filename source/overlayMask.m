@@ -144,12 +144,11 @@ switch class(image)
             error(['Input image is of type double - its values must be in the range [0, 1]. Instead it had the range [', num2str(minVal), ', ', num2str(maxVal), ']'])
         end
     case {'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64'}
-        image = cast(image, 'double')/double(intmax(class(image)));
+        image = double(image)/double(intmax(class(image)));
     otherwise
         error(['image must be a numeric class. Instead, it was', class(image)]);
 end
 
-originalClass = class(image);
 overlayImage = image;
 for k = 1:length(mask)
     thisOrigin = origin{k};
@@ -161,15 +160,15 @@ for k = 1:length(mask)
 
     [x1, x2, y1, y2, overlaps] = getRectangleOverlap(1, w, 1, h, thisOrigin(1), thisOrigin(1) + wm - 1, thisOrigin(2), thisOrigin(2) + hm - 1);
 
-    x1m = x1 - thisOrigin(1) + 1;
-    y1m = y1 - thisOrigin(2) + 1;
-    x2m = x2 - thisOrigin(1) + 1;
-    y2m = y2 - thisOrigin(2) + 1;
-    if nImageFrames == 1
-        overlayImage(y1:y2, x1:x2, :) = overlayImage(y1:y2, x1:x2, :) + mask{k}(y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
-    else
-        overlayImage(:, y1:y2, x1:x2, :) = overlayImage(:, y1:y2, x1:x2, :) + mask{k}(:, y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
+    if overlaps
+        x1m = x1 - thisOrigin(1) + 1;
+        y1m = y1 - thisOrigin(2) + 1;
+        x2m = x2 - thisOrigin(1) + 1;
+        y2m = y2 - thisOrigin(2) + 1;
+        if nImageFrames == 1
+            overlayImage(y1:y2, x1:x2, :) = overlayImage(y1:y2, x1:x2, :) + mask{k}(y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
+        else
+            overlayImage(:, y1:y2, x1:x2, :) = overlayImage(:, y1:y2, x1:x2, :) + mask{k}(:, y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
+        end
     end
 end
-% overlayImage = double(image)/(1+transparency) + colorMask;
-overlayImage = cast(overlayImage, originalClass);
