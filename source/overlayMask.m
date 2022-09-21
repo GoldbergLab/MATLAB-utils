@@ -98,6 +98,8 @@ for k = 1:length(mask)
     if ~islogical(mask{k})
         mask{k} = logical(mask{k});
     end
+    [mask{k}, ylimits, xlimits] = cropMask(mask{k});
+    origin{k} = origin{k} + [xlimits(1), ylimits(1)] - 1;
     switch ndims(mask{k})
         case 2
             if nImageFrames == 1
@@ -134,20 +136,17 @@ end
 % Transform overlayMask to an appropriate data type with appropriate
 % scaling for the image
 
-for k = 1:length(mask)
-    switch class(image)
-        case {'single', 'double'}
-            maxVal = max(image(:));
-            minVal = min(image(:));
-            if minVal < 0 || maxVal > 1
-                error(['Input image is of type double - its values must be in the range [0, 1]. Instead it had the range [', num2str(minVal), ', ', num2str(maxVal), ']'])
-            end
-            mask{k} = 1*mask{k};
-        case {'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64'}
-            image = cast(image, 'double')/double(intmax(class(image)));
-        otherwise
-            error(['image must be a numeric class. Instead, it was', class(image)]);
-    end
+switch class(image)
+    case {'single', 'double'}
+        maxVal = max(image(:));
+        minVal = min(image(:));
+        if minVal < 0 || maxVal > 1
+            error(['Input image is of type double - its values must be in the range [0, 1]. Instead it had the range [', num2str(minVal), ', ', num2str(maxVal), ']'])
+        end
+    case {'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64'}
+        image = cast(image, 'double')/double(intmax(class(image)));
+    otherwise
+        error(['image must be a numeric class. Instead, it was', class(image)]);
 end
 
 originalClass = class(image);
@@ -155,24 +154,21 @@ overlayImage = image;
 for k = 1:length(mask)
     thisOrigin = origin{k};
 
-    x1 = max(1, thisOrigin(1));
-    y1 = max(1, thisOrigin(2));
-    x1m = max(1, 1-thisOrigin(1)+1);
-    y1m = max(1, 1-thisOrigin(2)+1);
+    w = size(image, length(size(image))-1);
+    h = size(image, length(size(image))-2);
+    wm = size(mask{k}, length(size(mask{k}))-1);
+    hm = size(mask{k}, length(size(mask{k}))-2);
+
+    [x1, x2, y1, y2, overlaps] = getRectangleOverlap(1, w, 1, h, thisOrigin(1), thisOrigin(1) + wm - 1, thisOrigin(2), thisOrigin(2) + hm - 1);
+
+    x1m = x1 - thisOrigin(1) + 1;
+    y1m = y1 - thisOrigin(2) + 1;
+    x2m = x2 - thisOrigin(1) + 1;
+    y2m = y2 - thisOrigin(2) + 1;
     if nImageFrames == 1
-        h = size(image, length(size(image))-2);
-        w = size(image, length(size(image))-1);
-        hm = size(mask{k}, length(size(mask{k}))-2);
-        wm = size(mask{k}, length(size(mask{k}))-1);
-        y2 = min(y1 + size(mask{k}, 1) - 1 + thisOrigin(2) - 1, h);
-        x2 = min(x1 + size(mask{k}, 2) - 1 + thisOrigin(1) - 1, w);
-        x2m = min(wm, w-x1+1);
-        y2m = min(hm, h-y1+1);
-        overlayImage(y1:y2, x1:x2, :) = overlayImage(y1:y2, x1:x2, :)/(1+transparency{k}) + mask{k}(y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
+        overlayImage(y1:y2, x1:x2, :) = overlayImage(y1:y2, x1:x2, :) + mask{k}(y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
     else
-        y2 = y1 + min(size(mask{k}, 2) - 1, size(image, length(size(image))-1));
-        x2 = x1 + min(size(mask{k}, 3) - 1, size(image, length(size(image))-1));
-        overlayImage(:, y1:y2, x1:x2, :) = overlayImage(:, y1:y2, x1:x2, :)/(1+transparency{k}) + mask{k}*(transparency{k}/(1+transparency{k}));
+        overlayImage(:, y1:y2, x1:x2, :) = overlayImage(:, y1:y2, x1:x2, :) + mask{k}(:, y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
     end
 end
 % overlayImage = double(image)/(1+transparency) + colorMask;
