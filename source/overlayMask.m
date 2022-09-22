@@ -60,9 +60,14 @@ if length(color) ~= length(mask)
     error('If a cell array of colors is passed, the # of colors must match the # of masks.');
 end
 
-% Check that dimensions of image and overlayMask are appropriate
-if ndims(mask) ~= 2
-    error(['overlayMask must be 2D. Instead, overlayMask was ', ndims(mask),'D'])
+if any(size(image) == 1) 
+    image = squeeze(image);
+end
+
+for k = 1:length(mask)
+    if any(size(mask{k}) == 1)
+        mask{k} = squeeze(mask{k});
+    end
 end
 
 switch ndims(image)
@@ -95,10 +100,16 @@ if nImageChannels == 1
 end
 
 for k = 1:length(mask)
+    if isempty(mask{k})
+        continue;
+    end
     if ~islogical(mask{k})
         mask{k} = logical(mask{k});
     end
     [mask{k}, ylimits, xlimits] = cropMask(mask{k});
+    if isempty(mask{k})
+        continue;
+    end
     origin{k} = origin{k} + [xlimits(1), ylimits(1)] - 1;
     switch ndims(mask{k})
         case 2
@@ -151,6 +162,9 @@ end
 
 overlayImage = image;
 for k = 1:length(mask)
+    if isempty(mask{k})
+        continue;
+    end
     thisOrigin = origin{k};
 
     w = size(image, length(size(image))-1);
