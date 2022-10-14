@@ -23,6 +23,10 @@ classdef VideoBrowser < handle
         PlayIncrement           double = 1                      % Number of frames the play timer will advance by on each call.
         NumColorChannels        double                          % Number of color channels in the video (1 for grayscale, 3 for color)
         NavigationRedrawEnable  logical = false                 % Enable or disable navigation redraw
+        CoordinateDisplay       matlab.ui.control.UIControl
+        IsZooming               logical = false
+        ZoomStart               double = []
+        ZoomBox                 matlab.graphics.primitive.Rectangle
     end
     properties
         MainFigure          matlab.ui.Figure            % The main figure window
@@ -196,6 +200,7 @@ classdef VideoBrowser < handle
             obj.MainFigure =     figure('Units', 'normalized');
             obj.VideoAxes =      axes(obj.MainFigure, 'Units', 'normalized', 'Position', [0.05, 0.2, 0.9, 0.75]);
             obj.NavigationAxes = axes(obj.MainFigure, 'Units', 'normalized', 'Position', [0.05, 0.05, 0.9, 0.1]);
+            obj.CoordinateDisplay = uicontrol(obj.MainFigure, 'Style', 'text', 'Units', 'normalized', 'String', '', 'Position', [0.9, 0.155, 0.1, 0.04]);
 
             % Style graphics containers
             obj.MainFigure.ToolBar = 'none';
@@ -223,6 +228,11 @@ classdef VideoBrowser < handle
             if isempty(obj.VideoFrame) || ~isvalid(obj.VideoFrame)
                 % First time, create image
                 obj.VideoFrame = imshow(frameData, 'Parent', obj.VideoAxes);
+                obj.VideoFrame.HitTest = 'off';
+                obj.VideoFrame.PickableParts = 'none';
+                obj.VideoAxes.ButtonDownFcn = @obj.VideoClickHandler;
+                obj.VideoAxes.HitTest = 'on';
+                obj.VideoAxes.PickableParts = 'all';
             else
                 % Not first time, change image data
                 obj.VideoFrame.CData = frameData;
@@ -372,6 +382,25 @@ classdef VideoBrowser < handle
             obj.Colormap = colormap;
             obj.drawNavigationData();
         end
+        function [inside, x, y] = inVideoAxes(obj, x, y)
+            % Determine if the given figure coordinates fall within the
+            %   borders of the VideoAxes or not..
+            if y < obj.VideoAxes.Position(2)
+                inside = false;
+            elseif y > obj.VideoAxes.Position(2) + obj.VideoAxes.Position(4)
+                inside = false;
+            elseif (x < obj.VideoAxes.Position(1))
+                inside = false;
+            elseif x > obj.VideoAxes.Position(1) + obj.VideoAxes.Position(3)
+                inside = false;
+            else
+                inside = true;
+            end
+        end
+        function [x, y] = getCurrentVideoPoint(obj)
+            x = round(obj.VideoAxes.CurrentPoint(1, 1));
+            y = round(obj.VideoAxes.CurrentPoint(1, 2));
+        end
         function inside = inNavigationAxes(obj, x, y)
             % Determine if the given figure coordinates fall within the
             %   borders of the NavigationAxes or not.
@@ -388,17 +417,94 @@ classdef VideoBrowser < handle
                 inside = true;
             end
         end
+        function ZoomVideoAxes(obj, x1, y1, x2, y2)
+            % Change limits on video axes
+            dx1 = diff(xlim(obj.VideoAxes));
+            dy1 = diff(ylim(obj.VideoAxes));
+            dx2 = x2 - x1;
+            dy2 = y2 - y1;
+            xc = (x1 + x2) / 2;
+            yc = (y1 + y2) / 2;
+            if dx2 < 0 || dy2 < 0
+                % Zoom box was reversed - interpret this as a zoom out
+                dx3 = abs(dx1 * dx1 / dx2);
+                dy3 = abs(dy1 * dy1 / dy2);
+            else
+                % Zoom box not reversed
+                dx3 = dx2;
+                dy3 = dy2;
+            end
+            % Construct new limits
+            new_xlim = [-dx3/2, dx3/2] + xc;
+            new_ylim = [-dy3/2, dy3/2] + yc;
+            
+            % Ensure we don't pointlessly zoom out farther than the limits
+            %   of the video frame
+            new_xlim = max(new_xlim, [1, 1]);
+            new_xlim = min(new_xlim, [obj.VideoFrame.XData(2), obj.VideoFrame.XData(2)]);
+            new_ylim = max(new_ylim, [1, 1]);
+            new_ylim = min(new_ylim, [obj.VideoFrame.YData(2), obj.VideoFrame.YData(2)]);
+
+            xlim(obj.VideoAxes, new_xlim);
+            ylim(obj.VideoAxes, new_ylim);
+        end
         function frameNum = mapFigureXToFrameNum(obj, x)
             % Convert a figure x coordinate to frame number based on the
             %   NavigationAxes position.
             
             frameNum = round((x - obj.NavigationAxes.Position(1)) * diff(obj.NavigationAxes.XLim) / obj.NavigationAxes.Position(3));
         end
+        function cancelZoom(obj)
+            obj.IsZooming = false;
+            obj.ZoomStart = [];
+            delete(obj.ZoomBox);
+        end
+        function VideoClickHandler(obj, ~, ~)
+            [x, y] = obj.getCurrentVideoPoint();
+            switch obj.MainFigure.SelectionType
+                case {'normal', 'open'}
+                case 'alt'
+                    if ~obj.IsZooming
+                        % Start zoom
+                        obj.ZoomStart = [x, y];
+                        obj.ZoomBox = rectangle(obj.VideoAxes, 'Position', [x, x, 0, 0], 'EdgeColor', 'r');
+                        obj.ZoomBox.HitTest = 'off';
+                        obj.IsZooming = true;
+                    else
+                        obj.ZoomVideoAxes(obj.ZoomStart(1), obj.ZoomStart(2), x, y);
+                        obj.cancelZoom();
+                    end
+            end
+        end
         function MouseMotionHandler(obj, src, ~)
             % Handle mouse motion events
             
             x = src.CurrentPoint(1, 1);
             y = src.CurrentPoint(1, 2);
+            if obj.inVideoAxes(x, y)
+                [x, y] = obj.getCurrentVideoPoint();
+                if x > 0 && y > 0 && x <= obj.VideoFrame.XData(2) && y <= obj.VideoFrame.YData(2)
+                    obj.CoordinateDisplay.String = sprintf('%d, %d', x, y);
+                else
+                    obj.CoordinateDisplay.String = '';
+                end
+                if obj.IsZooming
+                    % Update zoom box
+                    if any([x, y] - obj.ZoomStart < 0)
+                        color = 'b';
+                    else
+                        color = 'r';
+                    end
+                    if all([x, y] - obj.ZoomStart ~= 0)
+                        obj.ZoomBox.Position = [min([[x, y]; obj.ZoomStart], [], 1), abs([x, y] - obj.ZoomStart)];
+                        obj.ZoomBox.EdgeColor = color;
+                    end
+                end
+            else
+                if obj.IsZooming
+                    obj.cancelZoom();
+                end
+            end
             if obj.inNavigationAxes(x, y)
                 frameNum = obj.mapFigureXToFrameNum(x);
                 obj.CurrentFrameNum = frameNum;
