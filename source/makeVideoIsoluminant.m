@@ -16,6 +16,9 @@ function isoluminantVideoData = makeVideoIsoluminant(videoData, brightness)
 %   sets the brightness of each frame to the same value; either a given
 %   brightness, or the overall mean brightness of the original video.
 %
+% Note that as written, this uses a simplistic definition of isoluminant. 
+%   It is not perceptually adjusted or whatever.
+%
 % See also: loadVideoData
 %
 % Version: 1.1
