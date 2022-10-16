@@ -75,10 +75,13 @@ end
 % Use ffmpeg to convert file to raw bytes
 cmd = sprintf('ffmpeg -i "%s" -an -vsync 0 -f rawvideo -pix_fmt %s -v error -y "%s"', videoPath, fmt, tempFilePath);
 [status,cmdout] = system(cmd);
-if status ~= 0 || ~isempty(cmdout)
+if status ~= 0
     error(cmdout);
     return;
 end
+% if  ~isempty(cmdout)
+%     disp(cmdout)
+% end
 
 try
     % Open and read in raw file
