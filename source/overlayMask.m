@@ -16,7 +16,8 @@ function overlayImage = overlayMask(image, mask, color, transparency, origin)
 %       If a mask stack is passed, image must also be a stack of the same
 %       depth.
 %    color is a color value to use to overlay the overlayMask, or a cell
-%       array of colors, one per mask
+%       array of colors, one per mask. Each color should be a 1x3 array of
+%       RGB color values.
 %    transparency is a transparency value from 0 to 1 to use to overlay 
 %       the overlayMask, or a cell array 
 %    origin is an optional 2-vector indicating where in the image the 
@@ -67,6 +68,13 @@ end
 for k = 1:length(mask)
     if any(size(mask{k}) == 1)
         mask{k} = squeeze(mask{k});
+    end
+end
+
+for k = 1:length(color)
+    % Check that colors are valid.
+    if length(color{k}) ~= 3 || ~isnumeric(color{k})
+        error('Expected colors to each be a 1x3 array of RGB color values.')
     end
 end
 
