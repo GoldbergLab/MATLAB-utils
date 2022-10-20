@@ -5,15 +5,24 @@ classdef VideoBrowser < handle
     %       each frame. Moving the mouse over this navigational axes causes
     %       the video frame to update to the corresponding frame number.
     %
-    %   Keyboard commands:
-    %     space =                    play/stop video
-    %     right/left arrow =         increment/decrement frame number by 1
-    %       frame, or if video is playing, increase/decrease playback speed
-    %     shift-right/left arrow =   increment/decrement frame number by 10
-    %       frames
-    %     control-right/left arrow = increment/decrement frame number by 
-    %       100 frames
-    %     control-g =                jump to a specific frame number
+    %   Keyboard controls:
+    %     space =                       play/stop video
+    %     right/left arrow =            increment/decrement frame number by 
+    %                                   1 frame, or if video is playing, 
+    %                                   increase/decrease playback speed
+    %     shift-right/left arrow =      increment/decrement frame number by
+    %                                   10 frames
+    %     control-right/left arrow =    increment/decrement frame number by 
+    %                                   100 frames
+    %     control-g =                   jump to a specific frame number
+    %
+    %   Mouse controls:
+    %     mouse over nav axes =         advance video frame to match mouse
+    %     right-click on image axes =   start/stop zoom in/out box. Start
+    %                                   box with upper left corner to zoom 
+    %                                   in. Start with lower right to zoom 
+    %                                   out.
+    %     double-click on image axes =  restore original zoom
     %
     properties (Access = private)
         VideoFrame              matlab.graphics.primitive.Image % An image object containing the video frame image
@@ -429,10 +438,18 @@ classdef VideoBrowser < handle
             % Change limits on video axes
             dx1 = diff(xlim(obj.VideoAxes));
             dy1 = diff(ylim(obj.VideoAxes));
-            dx2 = x2 - x1;
-            dy2 = y2 - y1;
-            xc = (x1 + x2) / 2;
-            yc = (y1 + y2) / 2;
+            if ~exist('x1', 'var') || isempty(x1)
+                % Zoom to fit
+                dx2 = diff(obj.VideoFrame.XData);
+                dy2 = diff(obj.VideoFrame.YData);
+                xc = mean(obj.VideoFrame.XData);
+                yc = mean(obj.VideoFrame.YData);
+            else
+                dx2 = x2 - x1;
+                dy2 = y2 - y1;
+                xc = (x1 + x2) / 2;
+                yc = (y1 + y2) / 2;
+            end
             if dx2 < 0 || dy2 < 0
                 % Zoom box was reversed - interpret this as a zoom out
                 dx3 = abs(dx1 * dx1 / dx2);
@@ -470,7 +487,9 @@ classdef VideoBrowser < handle
         function VideoClickHandler(obj, ~, ~)
             [x, y] = obj.getCurrentVideoPoint();
             switch obj.MainFigure.SelectionType
-                case {'normal', 'open'}
+                case {'open'}
+                    obj.ZoomVideoAxes();
+                    obj.cancelZoom();
                 case 'alt'
                     if ~obj.IsZooming
                         % Start zoom
