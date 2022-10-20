@@ -41,9 +41,10 @@ classdef VideoBrowser < handle
         CurrentFrameNum = 1             % An integer representing the current frame number
         PlaybackSpeed = 25              % Playback speed in fps
         Colormap = colormap()           % Colormap for NavigationAxes
+        Title = ''                      % Title for plot
     end
     methods
-        function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap)
+        function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap, title)
             % Construct a new VideoBrowser object.
             %   VideoData = a N x H x W double or uint8 array, where N =
             %       the number of frames, H and W are the height and width
@@ -67,7 +68,13 @@ classdef VideoBrowser < handle
             %   NavigationColor = a color specification for the points in
             %       the NavigationAxes scatter plot. See the color argument
             %       for the scatter function for documentation.
-            
+            %   title = a char array to use as the image title
+
+            if ~exist('title', 'var') || isempty(title)
+                title = '';
+            end
+            obj.Title = title;
+
             obj.createDisplayArea();
 
             if ~exist('VideoData', 'var') || isempty(VideoData)
@@ -230,6 +237,7 @@ classdef VideoBrowser < handle
                 obj.VideoFrame = imshow(frameData, 'Parent', obj.VideoAxes);
                 obj.VideoFrame.HitTest = 'off';
                 obj.VideoFrame.PickableParts = 'none';
+                obj.VideoAxes.Title.String = obj.Title;
                 obj.VideoAxes.ButtonDownFcn = @obj.VideoClickHandler;
                 obj.VideoAxes.HitTest = 'on';
                 obj.VideoAxes.PickableParts = 'all';
