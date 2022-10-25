@@ -188,9 +188,9 @@ for k = 1:length(mask)
         x2m = x2 - thisOrigin(1) + 1;
         y2m = y2 - thisOrigin(2) + 1;
         if nImageFrames == 1
-            overlayImage(y1:y2, x1:x2, :) = overlayImage(y1:y2, x1:x2, :) + mask{k}(y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
+            overlayImage(y1:y2, x1:x2, :) = overlayImage(y1:y2, x1:x2, :) + mask{k}(y1m:y2m, x1m:x2m, :)*(1 - transparency{k});
         else
-            overlayImage(:, y1:y2, x1:x2, :) = overlayImage(:, y1:y2, x1:x2, :) + mask{k}(:, y1m:y2m, x1m:x2m, :)*(transparency{k}/(1+transparency{k}));
+            overlayImage(:, y1:y2, x1:x2, :) = overlayImage(:, y1:y2, x1:x2, :) + mask{k}(:, y1m:y2m, x1m:x2m, :)*(1 - transparency{k});
         end
     end
 end
