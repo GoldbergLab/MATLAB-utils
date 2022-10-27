@@ -5,8 +5,8 @@ function [cropped_mask, xlimits, ylimits] = cropMask(mask, pad)
 %         [cropped_mask, xlimits, ylimits] = cropMask(mask)
 %
 % where,
-%    mask is a 2D logical array, or a 3D (N x H x W) stack of 2D logical
-%       arrays.
+%    mask is a 2D (H x W) logical array, or a 3D (N x H x W) stack of 2D 
+%       logical arrays.
 %    cropped_mask is a 2D logical array containing only the smallest region 
 %       of "mask" hat contains true values, or a 3D stack of 2D logical
 %       arrays, containing the smallest region that encompasses the true
@@ -22,7 +22,7 @@ function [cropped_mask, xlimits, ylimits] = cropMask(mask, pad)
 %
 % <long description>
 %
-% See also: <related functions>
+% See also: getMaskLim, crop3Mask
 %
 % Version: <version>
 % Author:  Brian Kardon
