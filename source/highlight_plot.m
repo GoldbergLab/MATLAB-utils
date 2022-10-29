@@ -84,3 +84,5 @@ for k = 1:length(ons)
     dx = off - on + 1;
     rectangles(k) = rectangle(ax, 'Position', [on, y_min - dy, dx, dy * 3], 'FaceColor', color, 'EdgeColor', 'none');
 end
+
+ylim(ax, ylimits);
