@@ -21,6 +21,14 @@ function rectangles = highlight_plot(varargin)
 %   according to the true values in the 1-D mask, and, if provided, the
 %   x-values in mask_x.
 %
+% Example:
+%
+%   x = 1:1000;
+%   y = sin(x/50);
+%   figure; plot(x, y);
+%   highlight_plot(y > 0.5);
+%   highlight_plot(y < -0.2, [0, 0, 1, 0.2]);
+%
 % See also: 
 %
 % Version: <version>

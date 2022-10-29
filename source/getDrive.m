@@ -14,7 +14,7 @@ if ~exist('resolve', 'var') || isempty(resolve)
     resolve = true;
 end
 if resolve
-    path = resolvePath(path);
+    path = getAbsolutePath(path);
 end
 pathParts = regexp(path, filesep, 'split');
 drive = pathParts{1};

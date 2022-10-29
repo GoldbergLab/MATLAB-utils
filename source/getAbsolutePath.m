@@ -9,9 +9,10 @@ function absolutePath = getAbsolutePath(path)
 %
 % This function returns the absolute path for a given path. The absolute
 %   path is the full path that uniquely identifies a file or folder on a
-%   computer. 
+%   computer. It seems like this works a little better than resolvePath in
+%   certain cases.
 %
-% See also: what, dir, fileparts
+% See also: what, dir, fileparts, resolvePath
 
 % Version: <version>
 % Author:  Brian Kardon
@@ -19,7 +20,7 @@ function absolutePath = getAbsolutePath(path)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if ~exist(path)
+if ~exist(path, 'file')
     error(['The given path ', path, ' does not appear to exist.']);
 end
 [p, n, e] = fileparts(path);

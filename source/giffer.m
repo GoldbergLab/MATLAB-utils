@@ -1,4 +1,5 @@
 function giffer(videoFileNameOrData, gifFileName, varargin)
+% Create gif from a video file or data
 % crop: optional = [x0, y0, f0, w, h, N]
 %   x0 = upper left crop X
 %   y0 = upper left crop Y
