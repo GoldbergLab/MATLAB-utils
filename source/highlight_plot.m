@@ -51,6 +51,9 @@ if isa(varargin{1}, 'logical')
 elseif isa(varargin{1}, 'numeric')
     % First argument is mask_x
     mask_x = varargin{1};
+    if length(varargin) < 2
+        error('Incorrect argument set - make sure the mask is a logical array.');
+    end
     mask = varargin{2};
     varargin(1:2) = [];
 end
@@ -85,7 +88,7 @@ y_min = ylimits(1);
 dy = diff(ylimits);
 
 % Loop over on/off locations, and produce rectangles to span them.
-rectangles = [];
+rectangles = rectangle().empty();
 for k = 1:length(ons)
     on = ons(k);
     off = offs(k);
