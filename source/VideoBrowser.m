@@ -6,23 +6,27 @@ classdef VideoBrowser < handle
     %       the video frame to update to the corresponding frame number.
     %
     %   Keyboard controls:
-    %     space =                       play/stop video
-    %     right/left arrow =            increment/decrement frame number by 
-    %                                   1 frame, or if video is playing, 
-    %                                   increase/decrease playback speed
-    %     shift-right/left arrow =      increment/decrement frame number by
-    %                                   10 frames
-    %     control-right/left arrow =    increment/decrement frame number by 
-    %                                   100 frames
-    %     control-g =                   jump to a specific frame number
+    %     space =                           play/stop video
+    %     control-space =                   play video, but only selected
+    %                                       frames
+    %     right/left arrow =                increment/decrement frame number by 
+    %                                       1 frame, or if video is playing, 
+    %                                       increase/decrease playback speed
+    %     shift-right/left arrow =          increment/decrement frame number by
+    %                                       10 frames
+    %     control-right/left arrow =        increment/decrement frame number by 
+    %                                       100 frames
+    %     control-g =                       jump to a specific frame number
     %
     %   Mouse controls:
-    %     mouse over nav axes =         advance video frame to match mouse
-    %     right-click on image axes =   start/stop zoom in/out box. Start
-    %                                   box with upper left corner to zoom 
-    %                                   in. Start with lower right to zoom 
-    %                                   out.
-    %     double-click on image axes =  restore original zoom
+    %     mouse over nav axes =             advance video frame to match mouse
+    %     right-click on image axes =       start/stop zoom in/out box. Start
+    %                                       box with upper left corner to zoom 
+    %                                       in. Start with lower right to zoom 
+    %                                       out.
+    %     double-click on image axes =      restore original zoom
+    %     left click/drag on nav axes =     select region of video
+    %     right click/drag on nav axes =    deselect region of video
     %
     properties (Access = private)
         VideoFrame              matlab.graphics.primitive.Image % An image object containing the video frame image
@@ -36,6 +40,9 @@ classdef VideoBrowser < handle
         IsZooming               logical = false
         ZoomStart               double = []
         ZoomBox                 matlab.graphics.primitive.Rectangle
+        IsSelecting             logical = false
+        SelectStart             double
+        SelectionHandles        matlab.graphics.primitive.Rectangle
     end
     properties
         MainFigure          matlab.ui.Figure            % The main figure window
@@ -51,6 +58,7 @@ classdef VideoBrowser < handle
         PlaybackSpeed = 25              % Playback speed in fps
         Colormap = colormap()           % Colormap for NavigationAxes
         Title = ''                      % Title for plot
+        Selection logical               % 1-D mask representing selected frames
     end
     methods
         function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap, title)
@@ -148,12 +156,19 @@ classdef VideoBrowser < handle
                 otherwise
                     error('NavigationDataOrFcn argument must be of type function_handle, char, double, or uint8, not %s.', class(NavigationDataOrFcn));
             end
+            obj.Selection = false(1, size(obj.VideoData, 1));
             obj.NavigationRedrawEnable = true;
             obj.drawNavigationData();
 
         end
-        function playVideo(obj)
+        function playVideo(obj, selectedOnly)
+            % Start playback
+            
+            if ~exist('selectedOnly', 'var') || isempty(selectedOnly)
+                selectedOnly = false;
+            end
             warning('off', 'MATLAB:TIMER:RATEPRECISION');
+            warning('off', 'MATLAB:timer:miliSecPrecNotAllowed');
             if obj.PlaybackSpeed < 0
                 obj.PlayIncrement = -1;
             else
@@ -161,45 +176,96 @@ classdef VideoBrowser < handle
             end
             delete(obj.PlayJob);
             obj.PlayJob = timer();
-            obj.PlayJob.TimerFcn = @(~, ~)obj.playFcn();
+            obj.PlayJob.TimerFcn = @(~, ~)obj.playFcn(selectedOnly);
             obj.PlayJob.Period = 1 / abs(obj.PlaybackSpeed);
             obj.PlayJob.ExecutionMode = 'fixedRate';
+            obj.PlayJob.UserData.selectedOnly = selectedOnly;
             obj.PlayJob.start();
             warning('on', 'MATLAB:TIMER:RATEPRECISION');
+            warning('on', 'MATLAB:timer:miliSecPrecNotAllowed');
         end
-        function playFcn(obj)
+        function playFcn(obj, selectedOnly)
             % Display a new frame of the video while in play mode
+
             try
-                obj.incrementFrame(obj.PlayIncrement);
+                if selectedOnly
+                    obj.incrementSelectedFrame(obj.PlayIncrement);
+                else
+                    obj.incrementFrame(obj.PlayIncrement);
+                end
                 drawnow;
             catch me
-                if strcmp(me.identifier, 'images:imshow:invalidAxes')
-                    % Axes are missing, we're probably shutting down.
-                    % Stop and delete timer.
-                    stop(obj.PlayJob);
-                    delete(obj.PlayJob);
-                else
-                    throw(me);
+                switch me.identifier
+                    case {'images:imshow:invalidAxes', 'MATLAB:VideoBrowser:noSelection'}
+                        % Axes are missing, we're probably shutting down.
+                        % Stop and delete timer.
+                        stop(obj.PlayJob);
+                        delete(obj.PlayJob);
+                    otherwise
+                        throw(me);
                 end
             end
         end
         function stopVideo(obj)
+            % Stop video playback
+
             stop(obj.PlayJob);
             delete(obj.PlayJob);
         end
         function playing = isPlaying(obj)
+            % Check if video is currently playing
+
             playing = ~isempty(obj.PlayJob) && isvalid(obj.PlayJob) && strcmp(obj.PlayJob.Running, 'on');
         end
         function incrementFrame(obj, delta)
+            % Increment the current frame by delta
+
             obj.CurrentFrameNum = obj.CurrentFrameNum + delta;
         end
+        function incrementSelectedFrame(obj, delta)
+            % Increment the current frame by delta, while ensuring the next
+            % frame will be Selected
+
+            nextFrameNum = obj.CurrentFrameNum + delta;
+            if ~obj.Selection(nextFrameNum)
+                nextFrameNum = obj.findNextSelectedFrameNum(nextFrameNum, delta);
+            end
+            obj.CurrentFrameNum = nextFrameNum;
+        end
+        function nextFrame = findNextSelectedFrameNum(obj, currentFrame, direction)
+            % Find next frame after currentFrame in the direction specified
+            %   by the sign of direction that is currently selected
+
+            if direction > 0
+                nextFrame = find(obj.Selection(currentFrame:end), 1, "first") + currentFrame - 1;
+                if isempty(nextFrame)
+                    % Maybe we need to wrap around to the beginning
+                    nextFrame = find(obj.Selection, 1, "first");
+                end
+            else
+                nextFrame = find(obj.Selection(1:currentFrame), 1, "last");
+                if isempty(nextFrame)
+                    % Maybe we need to wrap around to the end
+                    nextFrame = find(obj.Selection, 1, "last");
+                end
+            end
+            if isempty(nextFrame)
+                % Ok, there is no selection.
+                err.message = 'No selection found';
+                err.identifier = 'MATLAB:VideoBrowser:noSelection';
+                error(err);
+            end
+        end
         function deleteDisplayArea(obj)
+            % Delete all graphics display objects
+
             delete(obj.VideoAxes);
             delete(obj.NavigationAxes);
             delete(obj.MainFigure);
         end
         function regenerateGraphics(obj)
             % Recreate graphics in case it gets closed
+
             obj.deleteDisplayArea();
             obj.createDisplayArea();
             obj.drawNavigationData();
@@ -232,6 +298,8 @@ classdef VideoBrowser < handle
 
             % Configure callbacks
             obj.MainFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
+            obj.MainFigure.WindowButtonUpFcn = @obj.MouseUpHandler;
+            obj.MainFigure.WindowButtonDownFcn = @obj.MouseDownHandler;
             obj.MainFigure.BusyAction = 'cancel';
             obj.MainFigure.KeyPressFcn = @obj.KeyPressHandler;
             obj.MainFigure.SizeChangedFcn = @obj.ResizeHandler;
@@ -350,6 +418,20 @@ classdef VideoBrowser < handle
                 obj.FrameNumberMarker.String = num2str(x);
             end
         end
+        function updateSelection(obj)
+            % Update the selection display to match the current selection
+
+            for k = 1:length(obj.SelectionHandles)
+                delete(obj.SelectionHandles(k));
+            end
+            obj.SelectionHandles = highlight_plot(obj.NavigationAxes, obj.Selection);
+        end
+        function set.Selection(obj, newSelection)
+            % Setter for Selection property
+
+            obj.Selection = newSelection;
+            obj.updateSelection();
+        end
         function set.VideoData(obj, newVideoData)
             % Setter for the VideoData property
             
@@ -391,8 +473,9 @@ classdef VideoBrowser < handle
             obj.PlaybackSpeed = fps;
             % If timer is already running, restart it
             if obj.isPlaying()
+                selectedOnly = obj.PlayJob.UserData.selectedOnly;
                 obj.stopVideo();
-                obj.playVideo();
+                obj.playVideo(selectedOnly);
             end
         end
         function set.Colormap(obj, colormap)
@@ -535,19 +618,49 @@ classdef VideoBrowser < handle
             if obj.inNavigationAxes(x, y)
                 frameNum = obj.mapFigureXToFrameNum(x);
                 obj.CurrentFrameNum = frameNum;
+                if obj.IsSelecting
+                    selectBounds = sort([obj.SelectStart, frameNum]);
+                    switch obj.MainFigure.SelectionType
+                        case 'normal'
+                            obj.Selection(selectBounds(1):selectBounds(2)) = true;
+                        case 'alt'
+                            obj.Selection(selectBounds(1):selectBounds(2)) = false;
+                    end
+                end
             end
         end
-        function KeyPressHandler(obj, src, event)
+        function MouseDownHandler(obj, src, ~)
+            x = src.CurrentPoint(1, 1);
+            y = src.CurrentPoint(1, 2);
+            if obj.inNavigationAxes(x, y)
+                frameNum = obj.mapFigureXToFrameNum(x);
+                obj.SelectStart = frameNum;
+                obj.IsSelecting = true;
+            end
+        end
+        function MouseUpHandler(obj, ~, ~)
+            if obj.IsSelecting
+                obj.IsSelecting = false;
+            end
+        end
+        function KeyPressHandler(obj, ~, event)
             switch event.Key
+                case 'escape'
+                    obj.Selection = false(1, size(obj.VideoData, 1));
                 case 'space'
                     if obj.isPlaying()
                         obj.stopVideo();
                     else
-                        obj.playVideo();
+                        % Check if user wants to play only selected frames
+                        selectedOnly = any(strcmp(event.Modifier, 'control')) && any(obj.Selection);
+                        % Start playback
+                        obj.playVideo(selectedOnly);
                     end
                 case 'rightarrow'
                     if obj.isPlaying()
+                        warning('off', 'MATLAB:TIMER:RATEPRECISION');
                         obj.PlaybackSpeed = obj.PlaybackSpeed + 10;
+                        warning('on', 'MATLAB:TIMER:RATEPRECISION');
                     else
                         if any(strcmp(event.Modifier, 'shift'))
                             delta = 10;
