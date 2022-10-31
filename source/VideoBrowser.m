@@ -17,6 +17,8 @@ classdef VideoBrowser < handle
     %     control-right/left arrow =        increment/decrement frame number by 
     %                                       100 frames
     %     control-g =                       jump to a specific frame number
+    %     escape =                          clear current selection
+    %     a =                               zoom to fit whole frame
     %
     %   Mouse controls:
     %     mouse over nav axes =             advance video frame to match mouse
@@ -50,15 +52,16 @@ classdef VideoBrowser < handle
         NavigationAxes      matlab.graphics.axis.Axes   % Axes for displaying the 1D metric
     end
     properties (SetObservable)
-        VideoData = []                  % The video data itself, a N x H x W double or uint8 array,
-        NavigationData = []             % The 1D navigational data, a 1 x N array
-        NavigationDataFunction = []     % A function handle that takes video data as an argument, and returns navigation data
-        NavigationColor = []            % A color specification for the navigation data. See the color argument in the scatter function.
-        CurrentFrameNum = 1             % An integer representing the current frame number
-        PlaybackSpeed = 25              % Playback speed in fps
-        Colormap = colormap()           % Colormap for NavigationAxes
-        Title = ''                      % Title for plot
-        Selection logical               % 1-D mask representing selected frames
+        VideoData = []                      % The video data itself, a N x H x W double or uint8 array,
+        NavigationData = []                 % The 1D navigational data, a 1 x N array
+        NavigationDataFunction = []         % A function handle that takes video data as an argument, and returns navigation data
+        NavigationColor = []                % A color specification for the navigation data. See the color argument in the scatter function.
+        CurrentFrameNum = 1                 % An integer representing the current frame number
+        PlaybackSpeed = 25                  % Playback speed in fps
+        Colormap = colormap()               % Colormap for NavigationAxes
+        Title = ''                          % Title for plot
+        Selection logical                   % 1-D mask representing selected frames
+        SelectionColor = [1, 0, 0, 0.2]     % Color of selection highlight
     end
     methods
         function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap, title)
@@ -107,7 +110,7 @@ classdef VideoBrowser < handle
                 NavigationColormap = colormap(obj.NavigationAxes);
             end
 
-            if length(size(VideoData)) == 4
+            if ndims(VideoData) == 4
                 if size(VideoData, 4) ~= 3
                     error('Incorrect video color dimension size: 4D videos must have the dimension order N x H x W x 3.');
                 end
@@ -424,7 +427,7 @@ classdef VideoBrowser < handle
             for k = 1:length(obj.SelectionHandles)
                 delete(obj.SelectionHandles(k));
             end
-            obj.SelectionHandles = highlight_plot(obj.NavigationAxes, obj.Selection);
+            obj.SelectionHandles = highlight_plot(obj.NavigationAxes, obj.Selection, obj.SelectionColor);
         end
         function set.Selection(obj, newSelection)
             % Setter for Selection property
@@ -655,6 +658,35 @@ classdef VideoBrowser < handle
                         selectedOnly = any(strcmp(event.Modifier, 'control')) && any(obj.Selection);
                         % Start playback
                         obj.playVideo(selectedOnly);
+                    end
+                case 'a'
+                    obj.ZoomVideoAxes()
+                case 's'
+                    if any(strcmp(event.Modifier, 'control'))
+                        % Save selected frames as a new video
+
+                        if any(obj.Selection)
+                            % Extract selected frames
+                            selection = obj.Selection;
+                        else
+                            % Nothing selected, just use the whole video
+                            selection = true(size(obj.Selection));
+                        end
+
+                        % Select frames and permute to match dim convention
+                        if ndims(obj.VideoData) == 4
+                            videoData = permute(obj.VideoData(selection, :, :, :), [2, 3, 4, 1]);
+                        else
+                            videoData = permute(obj.VideoData(selection, :, :), [2, 3, 1]);
+                        end
+
+                        % Get file path to save to from user
+                        [filename, path] = uiputfile('*','Save selected video data');
+                        filepath = fullfile(path, filename);
+                        if ~isempty(filename)
+                            fprintf('Saving %d frames to %s.\n', sum(selection), filepath);
+                            saveVideoData(videoData, filepath);
+                        end
                     end
                 case 'rightarrow'
                     if obj.isPlaying()
