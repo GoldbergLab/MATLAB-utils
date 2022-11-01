@@ -1,8 +1,8 @@
 classdef VideoPainter < VideoBrowser
     properties (Access = private)
-        IsPainting          logical = false
-        IsErasing           logical = false
-        Stack               StateStack
+        IsPainting          logical = false                      % Is user currently holding mouse button down on video axes?
+        IsErasing           logical = false                      % Is GUI currently in erase mode?
+        Stack               StateStack                           % Undo/redo stack
     end
     properties
         PaintMaskImage      matlab.graphics.primitive.Image      % Image handle to paint mask
@@ -10,6 +10,7 @@ classdef VideoPainter < VideoBrowser
         PaintBrush          struct                               % Brush
         PaintBrushMarker    matlab.graphics.primitive.Rectangle  % Brush marker
         PaintMask           logical = logical.empty()            % Painted mask stack
+        PaintEnabled        logical = true;                      % Enable painting with mouse?
     end
     properties (SetObservable)
     end
@@ -50,7 +51,7 @@ classdef VideoPainter < VideoBrowser
             if ~isfield(obj.PaintBrush, 'BrushRadius')
                 obj.PaintBrush(1).BrushRadius = 8;
             end
-            obj.PaintBrush.Brush = strel('disk', obj.PaintBrush.BrushRadius).Neighborhood;
+            obj.PaintBrush.Brush = createCircleMask(obj.PaintBrush.BrushRadius);
             obj.PaintBrush.ActualBrushRadius = (size(obj.PaintBrush.Brush, 1) - 1) / 2;
             if obj.IsErasing
                 obj.PaintBrush.EdgeColor = [0, 0, 1];
@@ -73,11 +74,16 @@ classdef VideoPainter < VideoBrowser
             w = 2 * r + 1;
             y1 = y - r - 0.5;
             h = 2 * r + 1;
-            if isempty(obj.PaintBrushMarker)
-                obj.PaintBrushMarker = rectangle('Position', [x1, y1, w, h], 'Curvature',[1,1], 'EdgeColor', obj.PaintBrush.EdgeColor, 'HitTest', 'off', 'PickableParts', 'none', 'Parent', obj.VideoAxes);
+            if obj.PaintEnabled
+                if isempty(obj.PaintBrushMarker)
+                    obj.PaintBrushMarker = rectangle('Position', [x1, y1, w, h], 'Curvature',[1,1], 'EdgeColor', obj.PaintBrush.EdgeColor, 'HitTest', 'off', 'PickableParts', 'none', 'Parent', obj.VideoAxes);
+                else
+                    obj.PaintBrushMarker.EdgeColor = obj.PaintBrush.EdgeColor;
+                    obj.PaintBrushMarker.Position = [x1, y1, w, h];
+                    obj.PaintBrushMarker.Visible = 'on';
+                end
             else
-                obj.PaintBrushMarker.EdgeColor = obj.PaintBrush.EdgeColor;
-                obj.PaintBrushMarker.Position = [x1, y1, w, h];
+                obj.PaintBrushMarker.Visible = 'off';
             end
         end
         function state = getState(obj)
@@ -96,10 +102,11 @@ classdef VideoPainter < VideoBrowser
             [x, y] = obj.getCurrentVideoPoint();
             switch obj.MainFigure.SelectionType
                 case 'normal'
-                    disp('hi')
-                    painted = obj.paint(x, y);
-                    if painted
-                        obj.updateVideoFrame(true)
+                    if obj.PaintEnabled
+                        painted = obj.paint(x, y);
+                        if painted
+                            obj.updateVideoFrame(true)
+                        end
                     end
             end
         end
@@ -176,10 +183,12 @@ classdef VideoPainter < VideoBrowser
             y = src.CurrentPoint(1, 2);
             switch obj.MainFigure.SelectionType
                 case 'normal'
-                    if obj.inVideoAxes(x, y)
-                        obj.updatePaintBrushParams();
-                        obj.SaveState();
-                        obj.IsPainting = true;
+                    if obj.PaintEnabled
+                        if obj.inVideoAxes(x, y)
+                            obj.updatePaintBrushParams();
+                            obj.SaveState();
+                            obj.IsPainting = true;
+                        end
                     end
             end
         end
