@@ -12,10 +12,10 @@ classdef VideoBrowser < handle
     %     right/left arrow =                increment/decrement frame number by 
     %                                       1 frame, or if video is playing, 
     %                                       increase/decrease playback speed
-    %     shift-right/left arrow =          increment/decrement frame number by
-    %                                       10 frames
     %     control-right/left arrow =        increment/decrement frame number by 
-    %                                       100 frames
+    %                                       10 frames
+    %     shift-right/left arrow =          increment/decrement frame number
+    %                                       while also selecting frames
     %     control-g =                       jump to a specific frame number
     %     escape =                          clear current selection
     %     a =                               zoom to fit whole frame
@@ -42,9 +42,9 @@ classdef VideoBrowser < handle
         IsZooming               logical = false
         ZoomStart               double = []
         ZoomBox                 matlab.graphics.primitive.Rectangle
-        IsSelecting             logical = false
-        SelectStart             double
-        SelectionHandles        matlab.graphics.primitive.Rectangle
+        IsSelectingFrames       logical = false
+        FrameSelectStart        double
+        FrameSelectionHandles   matlab.graphics.primitive.Rectangle
     end
     properties
         MainFigure          matlab.ui.Figure            % The main figure window
@@ -52,16 +52,16 @@ classdef VideoBrowser < handle
         NavigationAxes      matlab.graphics.axis.Axes   % Axes for displaying the 1D metric
     end
     properties (SetObservable)
-        VideoData = []                      % The video data itself, a N x H x W double or uint8 array,
-        NavigationData = []                 % The 1D navigational data, a 1 x N array
-        NavigationDataFunction = []         % A function handle that takes video data as an argument, and returns navigation data
-        NavigationColor = []                % A color specification for the navigation data. See the color argument in the scatter function.
-        CurrentFrameNum = 1                 % An integer representing the current frame number
-        PlaybackSpeed = 25                  % Playback speed in fps
-        Colormap = colormap()               % Colormap for NavigationAxes
-        Title = ''                          % Title for plot
-        Selection logical                   % 1-D mask representing selected frames
-        SelectionColor = [1, 0, 0, 0.2]     % Color of selection highlight
+        VideoData = []                          % The video data itself, a N x H x W double or uint8 array,
+        NavigationData = []                     % The 1D navigational data, a 1 x N array
+        NavigationDataFunction = []             % A function handle that takes video data as an argument, and returns navigation data
+        NavigationColor = []                    % A color specification for the navigation data. See the color argument in the scatter function.
+        CurrentFrameNum = 1                     % An integer representing the current frame number
+        PlaybackSpeed = 25                      % Playback speed in fps
+        Colormap = colormap()                   % Colormap for NavigationAxes
+        Title = ''                              % Title for plot
+        FrameSelection              logical     % 1-D mask representing selected frames
+        FrameSelectionColor = [1, 0, 0, 0.2]    % Color of selection highlight
     end
     methods
         function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap, title)
@@ -159,7 +159,7 @@ classdef VideoBrowser < handle
                 otherwise
                     error('NavigationDataOrFcn argument must be of type function_handle, char, double, or uint8, not %s.', class(NavigationDataOrFcn));
             end
-            obj.Selection = false(1, size(obj.VideoData, 1));
+            obj.FrameSelection = false(1, size(obj.VideoData, 1));
             obj.NavigationRedrawEnable = true;
             obj.drawNavigationData();
 
@@ -230,7 +230,7 @@ classdef VideoBrowser < handle
             % frame will be Selected
 
             nextFrameNum = obj.CurrentFrameNum + delta;
-            if ~obj.Selection(nextFrameNum)
+            if ~obj.FrameSelection(nextFrameNum)
                 nextFrameNum = obj.findNextSelectedFrameNum(nextFrameNum, delta);
             end
             obj.CurrentFrameNum = nextFrameNum;
@@ -240,16 +240,16 @@ classdef VideoBrowser < handle
             %   by the sign of direction that is currently selected
 
             if direction > 0
-                nextFrame = find(obj.Selection(currentFrame:end), 1, "first") + currentFrame - 1;
+                nextFrame = find(obj.FrameSelection(currentFrame:end), 1, "first") + currentFrame - 1;
                 if isempty(nextFrame)
                     % Maybe we need to wrap around to the beginning
-                    nextFrame = find(obj.Selection, 1, "first");
+                    nextFrame = find(obj.FrameSelection, 1, "first");
                 end
             else
-                nextFrame = find(obj.Selection(1:currentFrame), 1, "last");
+                nextFrame = find(obj.FrameSelection(1:currentFrame), 1, "last");
                 if isempty(nextFrame)
                     % Maybe we need to wrap around to the end
-                    nextFrame = find(obj.Selection, 1, "last");
+                    nextFrame = find(obj.FrameSelection, 1, "last");
                 end
             end
             if isempty(nextFrame)
@@ -424,15 +424,15 @@ classdef VideoBrowser < handle
         function updateSelection(obj)
             % Update the selection display to match the current selection
 
-            for k = 1:length(obj.SelectionHandles)
-                delete(obj.SelectionHandles(k));
+            for k = 1:length(obj.FrameSelectionHandles)
+                delete(obj.FrameSelectionHandles(k));
             end
-            obj.SelectionHandles = highlight_plot(obj.NavigationAxes, obj.Selection, obj.SelectionColor);
+            obj.FrameSelectionHandles = highlight_plot(obj.NavigationAxes, obj.FrameSelection, obj.FrameSelectionColor);
         end
-        function set.Selection(obj, newSelection)
+        function set.FrameSelection(obj, newSelection)
             % Setter for Selection property
 
-            obj.Selection = newSelection;
+            obj.FrameSelection = newSelection;
             obj.updateSelection();
         end
         function set.VideoData(obj, newVideoData)
@@ -466,6 +466,9 @@ classdef VideoBrowser < handle
             obj.updateVideoFrame();
             obj.updateFrameMarker();
         end
+        function selectedOnly = IsPlayingSelectedOnly(obj)
+            selectedOnly = obj.PlayJob.UserData.selectedOnly;
+        end
         function set.PlaybackSpeed(obj, fps)
             if abs(fps) > 1000
                 fps = 1000 * sign(fps);
@@ -476,7 +479,7 @@ classdef VideoBrowser < handle
             obj.PlaybackSpeed = fps;
             % If timer is already running, restart it
             if obj.isPlaying()
-                selectedOnly = obj.PlayJob.UserData.selectedOnly;
+                selectedOnly = obj.IsPlayingSelectedOnly();
                 obj.stopVideo();
                 obj.playVideo(selectedOnly);
             end
@@ -570,6 +573,9 @@ classdef VideoBrowser < handle
             obj.ZoomStart = [];
             delete(obj.ZoomBox);
         end
+        function NavigationClickHandler(obj, ~, ~)
+            disp('hi')
+        end
         function VideoClickHandler(obj, ~, ~)
             [x, y] = obj.getCurrentVideoPoint();
             switch obj.MainFigure.SelectionType
@@ -621,13 +627,13 @@ classdef VideoBrowser < handle
             if obj.inNavigationAxes(x, y)
                 frameNum = obj.mapFigureXToFrameNum(x);
                 obj.CurrentFrameNum = frameNum;
-                if obj.IsSelecting
-                    selectBounds = sort([obj.SelectStart, frameNum]);
+                if obj.IsSelectingFrames
+                    selectBounds = sort([obj.FrameSelectStart, frameNum]);
                     switch obj.MainFigure.SelectionType
                         case 'normal'
-                            obj.Selection(selectBounds(1):selectBounds(2)) = true;
+                            obj.FrameSelection(selectBounds(1):selectBounds(2)) = true;
                         case 'alt'
-                            obj.Selection(selectBounds(1):selectBounds(2)) = false;
+                            obj.FrameSelection(selectBounds(1):selectBounds(2)) = false;
                     end
                 end
             end
@@ -637,40 +643,70 @@ classdef VideoBrowser < handle
             y = src.CurrentPoint(1, 2);
             if obj.inNavigationAxes(x, y)
                 frameNum = obj.mapFigureXToFrameNum(x);
-                obj.SelectStart = frameNum;
-                obj.IsSelecting = true;
+                obj.FrameSelectStart = frameNum;
+                obj.IsSelectingFrames = true;
             end
         end
         function MouseUpHandler(obj, ~, ~)
-            if obj.IsSelecting
-                obj.IsSelecting = false;
+            if obj.IsSelectingFrames
+                obj.IsSelectingFrames = false;
             end
         end
-        function KeyPressHandler(obj, ~, event)
-            switch event.Key
+        function ChangeFrameHandler(obj, evt, direction)
+            % direction should be 1 or -1
+            select = false;
+            if obj.isPlaying()
+                % Video is playing - 
+                warning('off', 'MATLAB:TIMER:RATEPRECISION');
+                obj.PlaybackSpeed = obj.PlaybackSpeed + 10 * direction;
+                warning('on', 'MATLAB:TIMER:RATEPRECISION');
+            else
+                delta = 1 * direction;
+                if any(strcmp(evt.Modifier, 'control'))
+                    % User is holding down control - jump by 10
+                    delta = 10 * direction;
+                end
+
+                if any(strcmp(evt.Modifier, 'shift'))
+                    % User is holding down shift - select while 
+                    %   changing frames
+                    select = true;
+                    selectStart = obj.CurrentFrameNum;
+                end
+                obj.incrementFrame(delta);
+
+                if select
+                    % User is selecting while changing frames
+                    selectEnd = obj.CurrentFrameNum;
+                    obj.FrameSelection(selectStart:direction:selectEnd) = true;
+                end
+            end
+        end
+        function KeyPressHandler(obj, ~, evt)
+            switch evt.Key
                 case 'escape'
-                    obj.Selection = false(1, size(obj.VideoData, 1));
+                    obj.FrameSelection = false(1, size(obj.VideoData, 1));
                 case 'space'
                     if obj.isPlaying()
                         obj.stopVideo();
                     else
                         % Check if user wants to play only selected frames
-                        selectedOnly = any(strcmp(event.Modifier, 'control')) && any(obj.Selection);
+                        selectedOnly = any(strcmp(evt.Modifier, 'control')) && any(obj.FrameSelection);
                         % Start playback
                         obj.playVideo(selectedOnly);
                     end
                 case 'a'
                     obj.ZoomVideoAxes()
                 case 's'
-                    if any(strcmp(event.Modifier, 'control'))
+                    if any(strcmp(evt.Modifier, 'control'))
                         % Save selected frames as a new video
 
-                        if any(obj.Selection)
+                        if any(obj.FrameSelection)
                             % Extract selected frames
-                            selection = obj.Selection;
+                            selection = obj.FrameSelection;
                         else
                             % Nothing selected, just use the whole video
-                            selection = true(size(obj.Selection));
+                            selection = true(size(obj.FrameSelection));
                         end
 
                         % Select frames and permute to match dim convention
@@ -689,35 +725,11 @@ classdef VideoBrowser < handle
                         end
                     end
                 case 'rightarrow'
-                    if obj.isPlaying()
-                        warning('off', 'MATLAB:TIMER:RATEPRECISION');
-                        obj.PlaybackSpeed = obj.PlaybackSpeed + 10;
-                        warning('on', 'MATLAB:TIMER:RATEPRECISION');
-                    else
-                        if any(strcmp(event.Modifier, 'shift'))
-                            delta = 10;
-                        elseif any(strcmp(event.Modifier, 'control'))
-                            delta = 100;
-                        else
-                            delta = 1;
-                        end
-                        obj.incrementFrame(delta);
-                    end
+                    obj.ChangeFrameHandler(evt, 1)
                 case 'leftarrow'
-                    if obj.isPlaying()
-                        obj.PlaybackSpeed = obj.PlaybackSpeed - 10;
-                    else
-                        if any(strcmp(event.Modifier, 'shift'))
-                            delta = 10;
-                        elseif any(strcmp(event.Modifier, 'control'))
-                            delta = 100;
-                        else
-                            delta = 1;
-                        end
-                        obj.incrementFrame(-delta);
-                    end
+                    obj.ChangeFrameHandler(evt, -1)
                 case 'g'
-                    if any(strcmp(event.Modifier, 'control'))
+                    if any(strcmp(evt.Modifier, 'control'))
                         % control-g pressed
                         frame = inputdlg('Enter frame number:', 'Goto frame number');
                         if ~isempty(frame)
