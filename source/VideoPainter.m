@@ -1,24 +1,29 @@
 classdef VideoPainter < VideoBrowser
     properties (Access = private)
-        IsPainting          logical = false                      % Is user currently holding mouse button down on video axes?
-        IsErasing           logical = false                      % Is GUI currently in erase mode?
-        Stack               StateStack                           % Undo/redo stack
+        IsErasing               logical = false                      % Is GUI currently in erase mode?
+        Stack                   StateStack                           % Undo/redo stack
     end
     properties
-        PaintMaskImage      matlab.graphics.primitive.Image      % Image handle to paint mask
-        PaintMaskColor      double = [1, 0, 0]                   % Color of paint mask
-        PaintBrush          struct                               % Brush
-        PaintBrushMarker    matlab.graphics.primitive.Rectangle  % Brush marker
-        PaintMask           logical = logical.empty()            % Painted mask stack
-        PaintEnabled        logical = true;                      % Enable painting with mouse?
+        PaintMaskImage          matlab.graphics.primitive.Image      % Image handle to paint mask
+        PaintMaskColor          double = [1, 0, 0]                   % Color of paint mask
+        PaintBrush              struct                               % Brush
+        PaintBrushMarker        matlab.graphics.primitive.Rectangle  % Brush marker
+        PaintMask               logical = logical.empty()            % Painted mask stack
+        PaintEnabled            logical = true;                      % Enable painting with mouse?
+        PaintedFrames           logical = logical.empty()            % Mask of frames that have been painted
     end
-    properties (SetObservable)
+    properties (Transient)
+        StrokeEndHandler        function_handle = @NOP               % Callback that fires when user completes a stroke, or uses undo/redo
+    end
+    properties (SetObservable, Access = private)
+        IsPainting              logical = false                      % Is user currently holding mouse button down on video axes?
     end
     methods
         function obj = VideoPainter(varargin)
             obj@VideoBrowser(varargin{:});
             obj.Stack = StateStack(100);
             obj.SaveState();
+            obj.PaintedFrames = false(size(obj.VideoData, 1));
         end
         function createDisplayArea(obj)
             createDisplayArea@VideoBrowser(obj);
@@ -86,31 +91,17 @@ classdef VideoPainter < VideoBrowser
                 obj.PaintBrushMarker.Visible = 'off';
             end
         end
-        function state = getState(obj)
-            % Get current state (for the undo/redo stack)
-            state.frameNum = obj.CurrentFrameNum;
-            state.frame = squeeze(obj.PaintMask(obj.CurrentFrameNum, :, :));
-        end
-        function setState(obj, state)
-            % Set current state (from the undo/redo stack)
-            obj.CurrentFrameNum = state.frameNum;
-            obj.PaintMask(obj.CurrentFrameNum, :, :) = state.frame;
-            obj.updateVideoFrame();
-        end
         function VideoClickHandler(obj, src, evt)
             VideoClickHandler@VideoBrowser(obj, src, evt);
             [x, y] = obj.getCurrentVideoPoint();
             switch obj.MainFigure.SelectionType
                 case 'normal'
                     if obj.PaintEnabled
-                        painted = obj.paint(x, y);
-                        if painted
-                            obj.updateVideoFrame(true)
-                        end
+                        obj.paint(x, y);
                     end
             end
         end
-        function painted = paint(obj, x, y)
+        function paint(obj, x, y)
             % x & y are in video coords
             if x >= obj.PaintBrush.xMin && x <= obj.PaintBrush.xMax && y >= obj.PaintBrush.yMin && y <= obj.PaintBrush.yMax
                 r = obj.PaintBrush.ActualBrushRadius;
@@ -119,9 +110,6 @@ classdef VideoPainter < VideoBrowser
                 else
                     obj.PaintMask(obj.CurrentFrameNum, y-r:y+r, x-r:x+r) = squeeze(obj.PaintMask(obj.CurrentFrameNum, y-r:y+r, x-r:x+r)) | obj.PaintBrush.Brush;
                 end
-                painted = true;
-            else
-                painted = false;
             end
         end
         function KeyPressHandler(obj, src, evt)
@@ -157,10 +145,7 @@ classdef VideoPainter < VideoBrowser
 
                 if obj.IsPainting
                     % We're painting!
-                    painted = obj.paint(x, y);
-                    if painted
-                        obj.updateVideoFrame(true)
-                    end
+                    obj.paint(x, y);
                 end
             end
         end
@@ -198,6 +183,18 @@ classdef VideoPainter < VideoBrowser
                 obj.IsPainting = false;
             end
         end
+        function state = getState(obj)
+            % Get current state (for the undo/redo stack)
+            state.frameNum = obj.CurrentFrameNum;
+            state.frame = squeeze(obj.PaintMask(obj.CurrentFrameNum, :, :));
+        end
+        function setState(obj, state)
+            % Set current state (from the undo/redo stack)
+            obj.CurrentFrameNum = state.frameNum;
+            obj.PaintMask(obj.CurrentFrameNum, :, :) = state.frame;
+            obj.updateVideoFrame();
+            obj.StrokeEndHandler();
+        end
         function ClearStack(obj)
             if ~isempty(obj.Stack)
                 obj.Stack.Clear();
@@ -221,6 +218,19 @@ classdef VideoPainter < VideoBrowser
                 newState = obj.Stack.RedoState(currentState);
                 obj.setState(newState);
             end
+        end
+        function callStrokeEndHandler(obj)
+            obj.StrokeEndHandler()
+        end
+        function set.IsPainting(obj, newIsPaintingValue)
+            obj.IsPainting = newIsPaintingValue;
+            if ~newIsPaintingValue
+                obj.callStrokeEndHandler();
+            end
+        end
+        function set.PaintMask(app, newMask)
+            app.PaintMask = newMask;
+            app.updateVideoFrame();
         end
     end
 end
