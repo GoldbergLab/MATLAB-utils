@@ -1,4 +1,4 @@
-function showAudioSpectrogram(audio, samplingRate, ax, flim)
+function showAudioSpectrogram(audio, samplingRate, ax, flim, clim)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % showAudioSpectrogram: Display a spectrogram of an audio signal as an 
 %   array
@@ -33,6 +33,9 @@ end
 if ~exist('flim', 'var') || isempty(flim)
     flim = [50, 7500];
 end
+if ~exist('clim', 'var') || isempty(clim)
+    clim = [13.0000, 24.5000];
+end
 
 nCourse = 1;
 
@@ -54,10 +57,10 @@ set(ax,'units',originalUnits);
 
 xl = xlim(ax);
 
-imagesc(ax, linspace(xl(1),xl(2), nTimeBins),f,power);
+imagesc(linspace(xl(1),xl(2), nTimeBins),f,power, 'Parent', ax);
 
-ax.YDir = 'normal';
+set(ax, 'YDir', 'normal');
 c = colormap;
 c(1, :) = [0, 0, 0];
-ax.Colormap = c;
-ax.CLim = [13.0000, 24.5000];
+colormap(ax, c);
+set(ax, 'CLim', clim);
