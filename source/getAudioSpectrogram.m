@@ -52,8 +52,8 @@ end
 if ~exist('clim', 'var') || isempty(clim)
     clim = [12.5, 28];
 end
-if ~exist('tlim', 'var') || isempty(tlim)
-    tlim = round(length(audio) / windowSize);
+if ~exist('tSize', 'var') || isempty(tSize)
+    tSize = round(length(audio) / windowSize);
 end
 
 numWindows = length(audio) / windowSize;
