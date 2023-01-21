@@ -69,7 +69,8 @@ classdef VideoBrowser < handle
             %   VideoData = a N x H x W double or uint8 array, where N =
             %       the number of frames, H and W are the height and width
             %       of each frame, or a N x H x W x 3 array, for videos
-            %       with color.
+            %       with color, or a char array representing a file path to
+            %       a video.
             %   NavigationDataOrFcn = either
             %       1. A 1 x N array, to be plotted in the NavigationAxes
             %       2. A function handle which takes N x H x W (x 3)
@@ -108,6 +109,18 @@ classdef VideoBrowser < handle
             end
             if ~exist('NavigationColormap', 'var') || isempty(NavigationColormap)
                 NavigationColormap = colormap(obj.NavigationAxes);
+            end
+
+            if ischar(VideoData)
+                % User has provided a filepath instead of the actual video
+                % data - load it.
+                VideoData = loadVideoData(VideoData);
+                switch ndims(VideoData)
+                    case 3
+                        VideoData = permute(VideoData, [3, 1, 2]);
+                    case 4
+                        VideoData = permute(VideoData, [4, 1, 2, 3]);
+                end
             end
 
             if ndims(VideoData) == 4
