@@ -1,4 +1,4 @@
-function stabilizedVideoData = stabilizeVideo(videoData, stationaryX, stationaryY, crop)
+function [stabilizedVideoData, dx, dy] = stabilizeVideo(videoData, stationaryX, stationaryY, crop)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % stabilizeVideo: Stabilize a video with an array of stationary coordinates
 % usage:  stabilizedVideoData = stabilizeVideo(videoData, stationaryX, stationaryY, crop)
@@ -66,16 +66,19 @@ x2s = zeros([1, numFrames]);
 y1s = zeros([1, numFrames]);
 y2s = zeros([1, numFrames]);
 
+dx = zeros([1, numFrames]);
+dy = zeros([1, numFrames]);
+
 % Loop over each frame and offset its position to stabilize the marker.
 for frameNum = 1:numFrames
-    dx = xMid - stationaryX(frameNum);
-    dy = yMid - stationaryY(frameNum);
+    dx(frameNum) = xMid - stationaryX(frameNum);
+    dy(frameNum) = yMid - stationaryY(frameNum);
 
     if color
-        [shiftedFrame, x1, y1, x2, y2] = shiftFrame(squeeze(videoData(:, :, :, frameNum)), dx, dy);
+        [shiftedFrame, x1, y1, x2, y2] = shiftFrame(squeeze(videoData(:, :, :, frameNum)), dx(frameNum), dy(frameNum));
         stabilizedVideoData(y1:y2, x1:x2, :, frameNum) = shiftedFrame;
     else
-        [shiftedFrame, x1, y1, x2, y2] = shiftFrame(squeeze(videoData(:, :, frameNum)), dx, dy);
+        [shiftedFrame, x1, y1, x2, y2] = shiftFrame(squeeze(videoData(:, :, frameNum)), dx(frameNum), dy(frameNum));
         stabilizedVideoData(y1:y2, x1:x2, frameNum) = shiftedFrame;
     end
     x1s(frameNum) = x1;
@@ -91,6 +94,9 @@ if crop
     else
         stabilizedVideoData = stabilizedVideoData(max(y1s):min(y2s), max(x1s):min(x2s), :);
     end
+
+    dx = dx - max(x1s) + 1;
+    dy = dy - max(y1s) + 1;
 end
 
 function [shiftedFrame, x1, y1, x2, y2] = shiftFrame(frame, dx, dy)
