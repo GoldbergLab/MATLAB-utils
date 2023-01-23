@@ -112,9 +112,9 @@ if ~isempty(cropSize)
 
     switch ndims(videoData)
         case 3
-            videoData = videoData(xCrop1:xCrop2, yCrop1:yCrop2, :);
+            videoData = videoData(yCrop1:yCrop2, xCrop1:xCrop2, :);
         case 4
-            videoData = videoData(xCrop1:xCrop2, yCrop1:yCrop2, :, :);
+            videoData = videoData(yCrop1:yCrop2, xCrop1:xCrop2, :, :);
     end
 end
 
