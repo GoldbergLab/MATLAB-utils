@@ -21,6 +21,7 @@ try
     end
     if no_ffmpeg
         % User requested we not use ffmpeg, so skip this method
+        disp('User requests no FFMPEG loading.')
         throw(MException('User requests no FFMPEG'));
     end
     if verbose
