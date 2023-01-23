@@ -1,6 +1,6 @@
 function saveVideoData(videoData, filename, varargin)
 
-if nargin >=3
+if nargin >=3 && ~isempty(varargin{1})
     videoType = varargin{1};
 else
     if ndims(videoData) == 3
