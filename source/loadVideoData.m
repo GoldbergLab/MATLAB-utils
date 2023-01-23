@@ -12,6 +12,17 @@ end
 verbose = true;
 
 try
+    try
+        % Check if user set NO_FFMPEG variable
+        no_ffmpeg = evalin('base', 'NO_FFMPEG');
+    catch ME
+        % User did not set NO_FFMPEG environment variable
+        no_ffmpeg = false;
+    end
+    if no_ffmpeg
+        % User requested we not use ffmpeg, so skip this method
+        throw(MException('User requests no FFMPEG'));
+    end
     if verbose
         disp('Loading using fastVideoReader...');
     end
