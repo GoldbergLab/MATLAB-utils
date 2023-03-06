@@ -94,10 +94,10 @@ handles.alteredText.String = handles.alteredPaths;
 
 function alteredPath = swapPath(originalPath, searchStrings, replaceStrings)
 if ischar(searchStrings)
-    searchStrings = charMatrixToCell(searchStrings);
+    searchStrings = char2D_to_cell(searchStrings);
 end
 if ischar(replaceStrings)
-    replaceStrings = charMatrixToCell(replaceStrings);
+    replaceStrings = char2D_to_cell(replaceStrings);
 end
 
 alteredPath = originalPath;
@@ -105,12 +105,6 @@ for k = 1:min(length(searchStrings), length(replaceStrings))
     searchString = searchStrings{k};
     replaceString = replaceStrings{k};
     alteredPath = strrep(alteredPath, searchString, replaceString);
-end
-
-function cellText = charMatrixToCell(charMatrix)
-cellText = {};
-for k = 1:size(charMatrix, 1)
-    cellText{end+1} = charMatrix(k, :);
 end
 
 % --- Outputs from this function are returned to the command line.
