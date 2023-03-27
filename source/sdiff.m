@@ -34,7 +34,7 @@ valueDiffs = {};
 
 for k = 1:length(fAll)
     fieldName = fAll{k};
-    if ~isequal(sA.(fieldName), sB.(fieldName))
+    if ~isequaln({sA.(fieldName)}, {sB.(fieldName)})
         valueDiffs{end+1} = fieldName;
     end
 end
