@@ -1,18 +1,34 @@
-function filepaths = findFilesByRegex(rootDir, regex, varargin)
-% Search rootDir (recursively if desired) and return a list of files that 
-%   match the regex
+function [filepaths, varargout] = findFilesByRegex(rootDir, regex, varargin)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% findFilesByRegex: Search rootDir for file paths that match the regex
+% usage:  filepaths = findFilesByRegex(rootDir, regex)
 %
-% rootDir: char array representing a directory to recursively search
-% regex: char array representing a file regex to match
-% matchPath (optional): boolean flag, apply regex to path as well as name, 
-%   default false
-% recurse (optional): boolean flag, apply regex recursively to 
-%   subdirectories as well, default true. If given as a positive integer, it
-%   specifies the recursion depth.
-% includeFolders (optional) boolean flag, include folders in results, 
-%   default false.
-% includeFiles (optional) boolean flag, include regular files in results, 
-%   default true.
+% where,
+%    rootDir is a char array representing a directory to recursively search
+%    regex is char array representing a file regex to match. Note that if
+%       the regex contains one or more capturing groups, the text of those
+%       captured groups can be retrieved from varargout
+%    matchpath is an optional boolean flag indicating whether to apply 
+%       the regex to path as well as name. Default is false.
+%    recurse is an optional boolean flag indicating whether to apply regex 
+%       recursively to subdirectories as well. Default is true. If given as
+%       a positive integer, it specifies the maximum recursion depth.
+%   includeFolders is an optional boolean flag, include folders in results. 
+%       Default is false.
+%   includeFiles is an optional boolean flag indicating whether to include 
+%       regular files in results, default true.
+%
+% This is a function that returns a simple cell array of paths when given a
+%   root directory and a regular expression to filter the files and folders
+%   within.
+%
+% See also: dir
+%
+% Version: 1.0
+% Author:  Brian Kardon
+% Email:   bmk27=cornell*org, brian*kardon=google*com
+% Real_email = regexprep(Email,{'=','*'},{'@','.'})
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if nargin>2
     matchPath = varargin{1};
@@ -58,6 +74,7 @@ if ~includeFiles
 end
 
 filepaths = {};
+varargout = {};
 for k = 1:length(files)
     [~, name, ext] = fileparts(files(k).name);
     if matchPath
@@ -65,8 +82,23 @@ for k = 1:length(files)
     else
         matchName = [name, ext];
     end
-    if regexp(matchName, regex)
+    
+    [match, tokens] = regexp(matchName, regex, 'start', 'tokens');
+
+    if match
         filepaths(end+1) = {fullfile(rootDir, files(k).name)};
+        if ~isempty(tokens) && nargout > 1
+            tokens = tokens{1};
+            if isempty(varargout)
+                varargout = cell(1, length(tokens));
+                for j = 1:length(tokens)
+                    varargout{j} = {};
+                end
+            end
+            for j = 1:length(tokens)
+                varargout{j}{end+1} = tokens{j};
+            end
+        end
     end
 end
 
