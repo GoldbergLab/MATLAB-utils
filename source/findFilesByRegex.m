@@ -8,7 +8,7 @@ function [filePaths, varargout] = findFilesByRegex(rootDir, regex, matchPath, re
 %    rootDir is a char array representing a directory to recursively search
 %    regex is char array representing a file regex to match. Note that if
 %       the regex contains one or more capturing groups, the text of those
-%       captured groups can be retrieved from varargout
+%       captured groups can be retrieved from varargout. Default is '.*'.
 %    matchpath is an optional boolean flag indicating whether to apply 
 %       the regex to path as well as name. Default is false.
 %    recurse is an optional boolean flag indicating whether to apply regex 
@@ -54,6 +54,10 @@ function [filePaths, varargout] = findFilesByRegex(rootDir, regex, matchPath, re
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if ~exist('regex', 'var') || isempty(regex)
+    regex = '.*';
+end
 
 if ~exist('matchPath', 'var') || isempty(matchPath)
     matchPath = false;
