@@ -68,3 +68,7 @@ c = colormap;
 c(1, :) = [0, 0, 0];
 colormap(ax, c);
 set(ax, 'CLim', clim);
+
+
+ylabel(ax, 'Frequency (Hz)');
+xlabel(ax, 'Time (s)');
