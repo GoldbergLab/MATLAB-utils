@@ -59,7 +59,8 @@ f = linspace(flim(1),flim(2),nFreqBins);
 
 set(ax,'units',originalUnits);
 
-xl = xlim(ax);
+xl = [0, length(audio)/samplingRate];
+xlim(ax, xl);
 
 imagesc(linspace(xl(1),xl(2), nTimeBins),f,power, 'Parent', ax);
 
