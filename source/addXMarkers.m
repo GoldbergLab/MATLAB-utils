@@ -111,8 +111,13 @@ realHeight = height * diff(originalYLim) / originalAxesHeight;
 newY0 = originalYLim(1) - realHeight;
 ylim(ax, [newY0, originalYLim(2)]);
 
+% Lock y-axis zoom
+z = zoom(ax);
+z.Motion = 'horizontal';
+z.Enable = 'on';
+
 % Add background color
-rectangle('Position', [0, newY0, diff(xlim(ax)), realHeight], 'FaceColor', bgcolor, 'EdgeColor', 'none');
+rectangle('Position', [0, newY0, diff(xlim(ax)), realHeight], 'FaceColor', bgcolor, 'EdgeColor', 'black');
 
 % Loop over times to create markers
 for k = 1:size(times, 1)
@@ -125,5 +130,12 @@ for k = 1:size(times, 1)
         text(ax, x0 + width/2, newY0 + realHeight/2, titles{k}, 'HorizontalAlignment', 'center');
     end
 end
+
+% Remove any tick labels on the markers
+disp('ticks:')
+originalYLim(1)
+ax.YTick
+ax.YTick(ax.YTick < originalYLim(1)) = [];
+ax.YTick
 
 ax.Units = originalAxesUnits;
