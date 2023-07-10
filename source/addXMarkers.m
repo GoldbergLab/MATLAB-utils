@@ -132,10 +132,6 @@ for k = 1:size(times, 1)
 end
 
 % Remove any tick labels on the markers
-disp('ticks:')
-originalYLim(1)
-ax.YTick
 ax.YTick(ax.YTick < originalYLim(1)) = [];
-ax.YTick
 
 ax.Units = originalAxesUnits;
