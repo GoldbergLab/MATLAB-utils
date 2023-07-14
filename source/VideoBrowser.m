@@ -60,8 +60,9 @@ classdef VideoBrowser < handle
         PlaybackSpeed = 25                      % Playback speed in fps
         Colormap = colormap()                   % Colormap for NavigationAxes
         Title = ''                              % Title for plot
-        FrameSelection              logical     % 1-D mask representing selected frames
+        FrameSelection          logical         % 1-D mask representing selected frames
         FrameSelectionColor = [1, 0, 0, 0.2]    % Color of selection highlight
+        FrameMarkerColor        char = 'black'  % The color of the frame marker and frame number marker
     end
     methods
         function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap, title)
@@ -419,16 +420,18 @@ classdef VideoBrowser < handle
                 redraw = varargin{1};
                 if redraw
                     delete(obj.FrameMarker);
+                    delete(obj.FrameNumberMarker);
                 end
             end
             x = obj.CurrentFrameNum;
             if isempty(obj.FrameMarker) || ~isvalid(obj.FrameMarker)
-                obj.FrameMarker = line([x, x], obj.NavigationAxes.YLim, 'Parent', obj.NavigationAxes, 'Color', 'black');
+                obj.FrameMarker = line([x, x], obj.NavigationAxes.YLim, 'Parent', obj.NavigationAxes, 'Color', obj.FrameMarkerColor);
             else
                 obj.FrameMarker.XData = [x, x];
+                obj.FrameMarker.YData = ylim(obj.NavigationAxes);
             end
             if isempty(obj.FrameNumberMarker) || ~isvalid(obj.FrameNumberMarker)
-                obj.FrameNumberMarker = text(obj.NavigationAxes, x + 20, mean(obj.NavigationAxes.YLim), num2str(x));
+                obj.FrameNumberMarker = text(obj.NavigationAxes, x + 20, mean(obj.NavigationAxes.YLim), num2str(x), 'Color', obj.FrameMarkerColor);
             else
                 obj.FrameNumberMarker.Position(1) = x + 20;
                 obj.FrameNumberMarker.String = num2str(x);
@@ -478,6 +481,10 @@ classdef VideoBrowser < handle
             obj.CurrentFrameNum = mod(newFrameNum - 1, obj.getNumFrames()) + 1;
             obj.updateVideoFrame();
             obj.updateFrameMarker();
+        end
+        function set.FrameMarkerColor(obj, newColor)
+            obj.FrameMarkerColor = newColor;
+            obj.updateFrameMarker(true);
         end
         function selectedOnly = IsPlayingSelectedOnly(obj)
             selectedOnly = obj.PlayJob.UserData.selectedOnly;
@@ -587,7 +594,6 @@ classdef VideoBrowser < handle
             delete(obj.ZoomBox);
         end
         function NavigationClickHandler(obj, ~, ~)
-            disp('hi')
         end
         function VideoClickHandler(obj, ~, ~)
             [x, y] = obj.getCurrentVideoPoint();
@@ -616,7 +622,7 @@ classdef VideoBrowser < handle
             if obj.inVideoAxes(x, y)
                 [x, y] = obj.getCurrentVideoPoint();
                 if x > 0 && y > 0 && x <= obj.VideoFrame.XData(2) && y <= obj.VideoFrame.YData(2)
-                    obj.CoordinateDisplay.String = sprintf('%d, %d', x, y);
+                    obj.CoordinateDisplay.String = sprintf('%d, %d = %s', x, y, num2str(obj.VideoData(obj.CurrentFrameNum, y, x, :)));
                 else
                     obj.CoordinateDisplay.String = '';
                 end
