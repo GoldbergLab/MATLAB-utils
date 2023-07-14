@@ -65,11 +65,10 @@ xlim(ax, xl);
 imagesc(linspace(xl(1),xl(2), nTimeBins),f,power, 'Parent', ax);
 
 set(ax, 'YDir', 'normal');
-c = colormap;
+c = colormap(ax, 'parula');
 c(1, :) = [0, 0, 0];
 colormap(ax, c);
 set(ax, 'CLim', clim);
-
 
 ylabel(ax, 'Frequency (Hz)');
 xlabel(ax, 'Time (s)');
