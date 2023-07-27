@@ -49,12 +49,11 @@ end
 
 maxVal = getMaxVal(imageData);
 
-xlim(ax2, [0, maxVal]);
+xlim(ax2, [-maxVal*0.05, maxVal*1.05]);
 
-xl = xlim(ax2);
 yl = ylim(ax2);
 
-p = rectangle('Position', [xl(1), yl(1), diff(xl), diff(yl)], 'FaceColor', [1, 0, 0, 0.1]);
+p = rectangle('Position', [0, 0, maxVal, diff(yl)], 'FaceColor', [1, 0, 0, 0.1]);
 
 f.UserData.maxVal = maxVal;
 f.UserData.OriginalImageData = imageData;
@@ -130,9 +129,8 @@ function cancelFunction(button, ~)
 fig = button.Parent;
 
 % Reset selection before closing
-xl = xlim(fig.UserData.HistogramAxes);
 yl = ylim(fig.UserData.HistogramAxes);
-fig.UserData.Highlight.Position = [xl(1), yl(1), diff(xl), diff(yl)];
+fig.UserData.Highlight.Position = [0, 0, fig.UserData.maxVal, diff(yl)];
 
 if ~fig.UserData.Immortal
     delete(fig);
@@ -156,10 +154,10 @@ function mouseButtonUpHandler(fig, ~)
 fig.UserData.Dragging = [false, false];
 
 function mouseMotionHandler(fig, ~)
-dataPosition = figurePositionToDataPosition(fig.CurrentPoint, fig.UserData.Highlight.Parent, true);
+[dataPosition, inAxes] = figurePositionToDataPosition(fig.CurrentPoint, fig.UserData.Highlight.Parent, true);
 mousePositionInHighlight = (dataPosition(1:2) - fig.UserData.Highlight.Position(1:2)) ./ fig.UserData.Highlight.Position(3:4);
 
-if mousePositionInHighlight(2) >= 0 && mousePositionInHighlight(2) <= 1 && (abs(mousePositionInHighlight(1)) < fig.UserData.DragMargin || abs(mousePositionInHighlight(1) - 1) < fig.UserData.DragMargin)
+if inAxes && mousePositionInHighlight(2) >= 0 && mousePositionInHighlight(2) <= 1 && (abs(mousePositionInHighlight(1)) < fig.UserData.DragMargin || abs(mousePositionInHighlight(1) - 1) < fig.UserData.DragMargin)
     fig.Pointer = 'left';
 else
     fig.Pointer = 'arrow';
@@ -208,7 +206,7 @@ end
 %     disp('None');
 % end
 
-function dataPosition = figurePositionToDataPosition(figPosition, ax, clamp)
+function [dataPosition, inAxes] = figurePositionToDataPosition(figPosition, ax, clamp)
 if ~exist('clamp', 'var')
     clamp = false;
 end
@@ -220,9 +218,11 @@ axesWidth = [diff(xl), diff(yl)];
 originalAxUnits = ax.Units;
 ax.Units = ax.Parent.Units;
 dataPosition = (figPosition - ax.Position(1:2)) .* axesWidth ./ ax.Position(3:4) + axesOrigin;
+inAxes = dataPosition(1) >= xl(1) && dataPosition(1) <= xl(2) && dataPosition(2) >= yl(1) && dataPosition(2) <= yl(2);
 if clamp
-    axesEnd = axesOrigin + axesWidth;
-    dataPosition(dataPosition < axesOrigin) = axesOrigin(dataPosition < axesOrigin);
-    dataPosition(dataPosition > axesEnd) = axesEnd(dataPosition > axesEnd);
+    dataOrigin = [0, yl(1)];
+    dataEnd = [ax.Parent.UserData.maxVal, yl(1) + yl(2)];
+    dataPosition(dataPosition < dataOrigin) = dataOrigin(dataPosition < dataOrigin);
+    dataPosition(dataPosition > dataEnd) = dataEnd(dataPosition > dataEnd);
 end
 ax.Units = originalAxUnits;
