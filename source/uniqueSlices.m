@@ -1,7 +1,8 @@
-function B = uniqueSlices(A, dim, setOrder)
+function [C, ia, ic] = uniqueSlices(A, dim, setOrder)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % uniqueSlices: find unique slices of an N-dimensional array
-% usage:  B = uniqueSlices(A, dim, setOrder)
+% usage:  C = uniqueSlices(A, dim, setOrder)
+%         [C, ia, ic] = uniqueSlices(A, dim, setOrder)
 %
 % where,
 %    A is an array of any dimensionality
@@ -12,6 +13,12 @@ function B = uniqueSlices(A, dim, setOrder)
 %       exist.
 %    setOrder is a char array indicating whether or not to sort the output.
 %       Options are 'stable' and 'sorted'. Default is 'sorted.
+%    C is the same as A with non-unique slices remoted
+%    ia, ic are index vectors representing the transformation from A to C
+%    and C to A, such that 
+%       C = A(:, ..., :, ia, :, ..., :)
+%    and 
+%       A = C(:, ..., :, ic, :, ..., :)
 %
 % This is an extension of the 'unique' function for N-dimensional arrays.
 %   It allows you to find unique slices of an array of arbitrary
@@ -44,9 +51,9 @@ A = permute(A, [dim, otherDims]);
 % Flatten slices so each slice is now a 1D row, making A into a 2D array
 A = reshape(A, [arraySize(dim), prod(arraySize(otherDims))]);
 % Find unique rows
-A = unique(A, setOrder, 'rows');
+[C, ia, ic] = unique(A, setOrder, 'rows');
 % Reshape slices into their original size
-A = reshape(A, [size(A, 1), arraySize(otherDims)]);
+C = reshape(C, [size(C, 1), arraySize(otherDims)]);
 % Unshuffle the dimension order so that the slice dimension back in its
 % original spot
-B = ipermute(A, [dim, otherDims]);
+C = ipermute(C, [dim, otherDims]);
