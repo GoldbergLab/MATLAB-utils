@@ -1,4 +1,4 @@
-function paths = findFilesByTimestamp(rootDir, startTimestamp, stopTimestamp, filenameTimestampParser, varargin)
+function [paths, fileTimestamps] = findFilesByTimestamp(rootDir, startTimestamp, stopTimestamp, filenameTimestampParser, varargin)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % getPathsByTimestamp: Find files within a range of timestamps
 % usage:  paths = getPathsByTimestamp(rootDir, startTimestamp, stopTimestamp, filenameTimestampParser)
@@ -6,13 +6,18 @@ function paths = findFilesByTimestamp(rootDir, startTimestamp, stopTimestamp, fi
 % where,
 %    rootDir is the directory in which to look for files
 %    startTimeStamp is a datetime object defining the earliest timestamp to
-%       include in the output paths
+%       include in the output paths. If empty, then no early cutoff is 
+%       applied.
 %    stopTimeStamp is a datetime object defining the latest timestamp to
-%       include in the output paths
+%       include in the output paths. If empty, then no late cutoff is
+%       applied.
 %    filenameTimestampParser is a function that takes a char array (a file
 %       path) and outputs a datetime object. If the provided char array
-%       does not contain a valid timestamp, the function should return an
-%       empty array.
+%       does not contain a valid timestamp, the function should return 
+%       NaT
+%    sortByTimestamp is an optional boolean that indicates whether or not
+%       to sort the paths by the extracted timestamp or not. Default is
+%       false (used if value given is empty).
 %    Other arguments: Additional arguments may be provided; these will be
 %       passed to the findFilesByRegex function before the timestamp filter
 %       is applied.
@@ -35,12 +40,23 @@ function paths = findFilesByTimestamp(rootDir, startTimestamp, stopTimestamp, fi
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% Handle default arguments
+if isempty(startTimestamp)
+    startTimestamp = datetime(-inf, -inf, -inf);
+end
+if isempty(stopTimestamp)
+    stopTimestamp = datetime(inf, inf, inf);
+end
+
 % Get list of all the files
 paths = findFilesByRegex(rootDir, varargin{:});
 
 % Prepare a mask indicating whether or not each path is in the timestamp
 % range.
 inRangePathMask = false(size(paths));
+
+% Initialize array to keep track of timestamps
+fileTimestamps = repmat(NaT(), size(paths));
 
 % Loop over the paths
 for k = 1:length(paths)
@@ -49,7 +65,8 @@ for k = 1:length(paths)
         % Extract the timestamp from the filename
         fileTimestamp = filenameTimestampParser(path);
         % Check if filename was un-parseable
-        if isempty(fileTimestamp)
+        if isempty(fileTimestamp) || isnat(fileTimestamp)
+            fileTimestamp = NaT();
             error('Timestamp format not recognized');
         end
         % Check if timestamp is in range
@@ -59,7 +76,10 @@ for k = 1:length(paths)
         fprintf('Failed to parse file %s:\n', path);
         warning(getReport(ME));
     end
+    % Keep track of the extracted timestamps
+    fileTimestamps(k) = fileTimestamp;
 end
 
-% Filter paths
+% Filter paths and timestamps
 paths = paths(inRangePathMask);
+fileTimestamps = fileTimestamps(inRangePathMask);
