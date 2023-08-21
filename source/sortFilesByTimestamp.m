@@ -1,4 +1,4 @@
-function [paths, I] = sortFilesByTimestamp(paths, filenameTimestampParserOrTimestamps)
+function [paths, I, fileTimestamps] = sortFilesByTimestamp(paths, filenameTimestampParserOrTimestamps)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % sortFilesByTimestamp: Sort list of files by extracted timestamp
 % usage:  paths = getPathsByTimestamp(rootDir, startTimestamp, stopTimestamp, filenameTimestampParser)
@@ -11,6 +11,8 @@ function [paths, I] = sortFilesByTimestamp(paths, filenameTimestampParserOrTimes
 %       the char array is not parseable, or alternatively a list of
 %       datetime objects corresponding to the list of paths.
 %    I is an array of indices representing the sort order
+%    fileTimestamps is the array of timestamps found for each file, NOT in
+%       sorted order
 %
 % This function sorts a list of file paths (or other char array) by
 %   timestamp, as determined by a provided timestamp parser function or a
@@ -30,7 +32,7 @@ function [paths, I] = sortFilesByTimestamp(paths, filenameTimestampParserOrTimes
 
 if isa(filenameTimestampParserOrTimestamps, 'function_handle')
     % User provided a timestamp parser function - parse the path timestamps
-    fileTimestamps = cellfun(filenameTimestampParserOrTimestamps, paths, 'UniformOutput', true);
+    fileTimestamps = filenameTimestampParserOrTimestamps(paths);
 elseif isa(filenameTimestampParserOrTimestamps, 'datetime')
     % User provided an array of timestamps - just use them.
     fileTimestamps = filenameTimestampParserOrTimestamps;
