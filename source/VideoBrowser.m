@@ -48,6 +48,7 @@ classdef VideoBrowser < handle
     end
     properties
         MainFigure          matlab.ui.Figure            % The main figure window
+        VideoPanel          matlab.ui.container.Panel   % Panel that contains video and nav axes
         VideoAxes           matlab.graphics.axis.Axes   % Axes for displaying the video frame
         NavigationAxes      matlab.graphics.axis.Axes   % Axes for displaying the 1D metric
     end
@@ -112,27 +113,6 @@ classdef VideoBrowser < handle
                 NavigationColormap = colormap(obj.NavigationAxes);
             end
 
-            if ischar(VideoData)
-                % User has provided a filepath instead of the actual video
-                % data - load it.
-                VideoData = loadVideoData(VideoData);
-                switch ndims(VideoData)
-                    case 3
-                        VideoData = permute(VideoData, [3, 1, 2]);
-                    case 4
-                        VideoData = permute(VideoData, [4, 1, 2, 3]);
-                end
-            end
-
-            if ndims(VideoData) == 4
-                if size(VideoData, 4) ~= 3
-                    error('Incorrect video color dimension size: 4D videos must have the dimension order N x H x W x 3.');
-                end
-                obj.NumColorChannels = 3;
-            else
-                obj.NumColorChannels = 1;
-            end
-            
             obj.VideoData = VideoData;
 
             % Temporarily disable drawing navigation to prevent all the
@@ -296,10 +276,11 @@ classdef VideoBrowser < handle
             obj.deleteDisplayArea();
             
             % Create graphics containers
-            obj.MainFigure =     figure('Units', 'normalized');
-            obj.VideoAxes =      axes(obj.MainFigure, 'Units', 'normalized', 'Position', [0.05, 0.2, 0.9, 0.75]);
-            obj.NavigationAxes = axes(obj.MainFigure, 'Units', 'normalized', 'Position', [0.05, 0.05, 0.9, 0.1]);
-            obj.CoordinateDisplay = uicontrol(obj.MainFigure, 'Style', 'text', 'Units', 'normalized', 'String', '', 'Position', [0.9, 0.155, 0.1, 0.04]);
+            obj.MainFigure =        figure('Units', 'normalized');
+            obj.VideoPanel =        uipanel(obj.MainFigure, 'Units', 'normalized', 'Position', [0, 0, 1, 1]);
+            obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized', 'Position', [0.05, 0.2, 0.9, 0.75]);
+            obj.NavigationAxes =    axes(obj.VideoPanel, 'Units', 'normalized', 'Position', [0.05, 0.05, 0.9, 0.1]);
+            obj.CoordinateDisplay = uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'Position', [0.9, 0.155, 0.1, 0.04]);
 
             % Style graphics containers
             obj.MainFigure.ToolBar = 'none';
@@ -312,6 +293,17 @@ classdef VideoBrowser < handle
             obj.NavigationAxes.YTickLabel = [];
             obj.NavigationAxes.YTick = [];
             axis(obj.NavigationAxes, 'off');
+
+            obj.VideoAxes.Toolbar.Visible = 'off';
+            obj.VideoAxes.YTickMode = 'manual';
+            obj.VideoAxes.YTickLabelMode = 'manual';
+            obj.VideoAxes.YTickLabel = [];
+            obj.VideoAxes.YTick = [];
+            obj.VideoAxes.XTickMode = 'manual';
+            obj.VideoAxes.XTickLabelMode = 'manual';
+            obj.VideoAxes.XTickLabel = [];
+            obj.VideoAxes.XTick = [];
+            axis(obj.VideoAxes, 'off');
 
             % Configure callbacks
             obj.MainFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
@@ -326,6 +318,12 @@ classdef VideoBrowser < handle
             %   VideoData and CurrentFrameNumber
             
             frameData = obj.getCurrentVideoFrameData();
+
+            if isempty(frameData)
+                % No frame data, skip update.
+                return
+            end
+
             if isempty(obj.VideoFrame) || ~isvalid(obj.VideoFrame)
                 % First time, create image
                 obj.VideoFrame = imshow(frameData, 'Parent', obj.VideoAxes);
@@ -399,6 +397,11 @@ classdef VideoBrowser < handle
         end
         function frameData = getCurrentVideoFrameData(obj)
             % Extract the current frame's video data
+            if isempty(obj.VideoData)
+                frameData = [];
+                return;
+            end
+
             switch obj.NumColorChannels
                 case 3
                     frameData = squeeze(obj.VideoData(obj.CurrentFrameNum, :, :, :));
@@ -451,11 +454,34 @@ classdef VideoBrowser < handle
             obj.FrameSelection = newSelection;
             obj.updateSelection();
         end
+        function updateNumColorChannels(obj)
+            if ndims(obj.VideoData) == 4
+                if size(obj.VideoData, 4) ~= 3
+                    error('Incorrect video color dimension size: 4D videos must have the dimension order N x H x W x 3.');
+                end
+                obj.NumColorChannels = 3;
+            else
+                obj.NumColorChannels = 1;
+            end
+        end
         function set.VideoData(obj, newVideoData)
             % Setter for the VideoData property
-            
+
+            if ischar(newVideoData)
+                % User has provided a filepath instead of the actual video
+                % data - load it.
+                newVideoData = loadVideoData(newVideoData);
+                switch ndims(newVideoData)
+                    case 3
+                        newVideoData = permute(newVideoData, [3, 1, 2]);
+                    case 4
+                        newVideoData = permute(newVideoData, [4, 1, 2, 3]);
+                end
+            end
             obj.VideoData = newVideoData;
-            obj.updateVideoFrame();
+            obj.setCurrentFrameNum(1);
+            obj.updateNumColorChannels();
+            obj.drawNavigationData();
         end
         function set.NavigationDataFunction(obj, newNavigationDataFunction)
             % Setter for the NavigationDataFunction property
@@ -474,6 +500,9 @@ classdef VideoBrowser < handle
             
             obj.NavigationColor = newNavigationColor;
             obj.drawNavigationData();
+        end
+        function setCurrentFrameNum(obj, newFrameNum)
+            obj.CurrentFrameNum = newFrameNum;
         end
         function set.CurrentFrameNum(obj, newFrameNum)
             % Setter for the CurrrentFrameNum property
@@ -522,6 +551,9 @@ classdef VideoBrowser < handle
             else
                 inside = true;
             end
+        end
+        function clearSelection(obj)
+            obj.FrameSelection = false(1, size(obj.VideoData, 1));
         end
         function [x, y] = getCurrentVideoPoint(obj)
             x = round(obj.VideoAxes.CurrentPoint(1, 1));
@@ -593,7 +625,7 @@ classdef VideoBrowser < handle
             obj.ZoomStart = [];
             delete(obj.ZoomBox);
         end
-        function NavigationClickHandler(obj, ~, ~)
+        function NavigationClickHandler(~, ~, ~)
         end
         function VideoClickHandler(obj, ~, ~)
             [x, y] = obj.getCurrentVideoPoint();
@@ -614,14 +646,24 @@ classdef VideoBrowser < handle
                     end
             end
         end
-        function MouseMotionHandler(obj, src, ~)
+        function [x, y] = GetCurrentVideoPanelPoint(obj)
+            % Get current X and Y relative to the lower left corner of the
+            % VideoPanel container
+            panelX0 = obj.VideoPanel.Position(1);
+            panelW = obj.VideoPanel.Position(3);
+            panelY0 = obj.VideoPanel.Position(2);
+            panelH = obj.VideoPanel.Position(4);
+
+            x = (obj.MainFigure.CurrentPoint(1, 1) - panelX0) / panelW;
+            y = (obj.MainFigure.CurrentPoint(1, 2) - panelY0) / panelH;
+        end
+        function MouseMotionHandler(obj, ~, ~)
             % Handle mouse motion events
-            
-            x = src.CurrentPoint(1, 1);
-            y = src.CurrentPoint(1, 2);
+            [x, y] = obj.GetCurrentVideoPanelPoint();
+
             if obj.inVideoAxes(x, y)
                 [x, y] = obj.getCurrentVideoPoint();
-                if x > 0 && y > 0 && x <= obj.VideoFrame.XData(2) && y <= obj.VideoFrame.YData(2)
+                if x > 0 && y > 0 && ~isempty(obj.VideoFrame) && x <= obj.VideoFrame.XData(2) && y <= obj.VideoFrame.YData(2)
                     obj.CoordinateDisplay.String = sprintf('%d, %d = %s', x, y, num2str(obj.VideoData(obj.CurrentFrameNum, y, x, :)));
                 else
                     obj.CoordinateDisplay.String = '';
@@ -646,7 +688,7 @@ classdef VideoBrowser < handle
             if obj.inNavigationAxes(x, y)
                 frameNum = obj.mapFigureXToFrameNum(x);
                 obj.CurrentFrameNum = frameNum;
-                if obj.IsSelectingFrames
+                if obj.IsSelectingFrames && obj.FrameSelectStart > 0 && frameNum > 0
                     selectBounds = sort([obj.FrameSelectStart, frameNum]);
                     switch obj.MainFigure.SelectionType
                         case 'normal'
@@ -667,9 +709,7 @@ classdef VideoBrowser < handle
             end
         end
         function MouseUpHandler(obj, ~, ~)
-            if obj.IsSelectingFrames
-                obj.IsSelectingFrames = false;
-            end
+            obj.IsSelectingFrames = false;
         end
         function ChangeFrameHandler(obj, evt, direction)
             % direction should be 1 or -1
@@ -704,7 +744,7 @@ classdef VideoBrowser < handle
         function KeyPressHandler(obj, ~, evt)
             switch evt.Key
                 case 'escape'
-                    obj.FrameSelection = false(1, size(obj.VideoData, 1));
+                    obj.clearSelection();
                 case 'space'
                     if obj.isPlaying()
                         obj.stopVideo();
