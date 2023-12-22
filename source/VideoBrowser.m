@@ -29,15 +29,16 @@ classdef VideoBrowser < handle
     %     double-click on image axes =      restore original zoom
     %     left click/drag on nav axes =     select region of video
     %     right click/drag on nav axes =    deselect region of video
+    %     scroll wheel on nav axes =        zoom in/out for nav axes
     %
     properties (Access = private)
-        VideoFrame              matlab.graphics.primitive.Image % An image object containing the video frame image
-        FrameMarker             matlab.graphics.primitive.Line  % A line on the NavigationAxes marking what frame is displayed
-        FrameNumberMarker       matlab.graphics.primitive.Text  % Text on the NavigationAxes indicating what frame number is displayed
-        PlayJob                 timer                           % A timer for playing the video
-        PlayIncrement           double = 1                      % Number of frames the play timer will advance by on each call.
-        NumColorChannels        double                          % Number of color channels in the video (1 for grayscale, 3 for color)
-        NavigationRedrawEnable  logical = false                 % Enable or disable navigation redraw
+        VideoFrame              matlab.graphics.primitive.Image     % An image object containing the video frame image
+        FrameMarker             matlab.graphics.primitive.Line      % A line on the NavigationAxes marking what frame is displayed
+        FrameNumberMarker       matlab.graphics.primitive.Text      % Text on the NavigationAxes indicating what frame number is displayed
+        PlayJob                 timer                               % A timer for playing the video
+        PlayIncrement           double = 1                          % Number of frames the play timer will advance by on each call.
+        NumColorChannels        double                              % Number of color channels in the video (1 for grayscale, 3 for color)
+        NavigationRedrawEnable  logical = false                     % Enable or disable navigation redraw
         CoordinateDisplay       matlab.ui.control.UIControl
         IsZooming               logical = false
         ZoomStart               double = []
@@ -54,6 +55,7 @@ classdef VideoBrowser < handle
     end
     properties (SetObservable)
         VideoData = []                          % The video data itself, a N x H x W double or uint8 array,
+        VideoPath = ''                          % Path to video, if provided
         NavigationData = []                     % The 1D navigational data, a 1 x N array
         NavigationDataFunction = []             % A function handle that takes video data as an argument, and returns navigation data
         NavigationColor = []                    % A color specification for the navigation data. See the color argument in the scatter function.
@@ -144,6 +146,9 @@ classdef VideoBrowser < handle
                         case 'compactness'
                             obj.NavigationData = [];
                             obj.NavigationDataFunction = @(videoData)sum(videoData, sumDims) ./ sum(getMaskSurface(videoData), sumDims);
+                        case {'audio', 'spectrogram'}
+                            obj.NavigationData = [];
+                            obj.NavigationDataFunction = NavigationDataOrFcn;
                         otherwise
                             error('Unrecognized named navigation data function: %s.', NavigationDataOrFcn);
                     end
@@ -309,6 +314,7 @@ classdef VideoBrowser < handle
             obj.MainFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
             obj.MainFigure.WindowButtonUpFcn = @obj.MouseUpHandler;
             obj.MainFigure.WindowButtonDownFcn = @obj.MouseDownHandler;
+            obj.MainFigure.WindowScrollWheelFcn = @obj.ScrollHandler;
             obj.MainFigure.BusyAction = 'cancel';
             obj.MainFigure.KeyPressFcn = @obj.KeyPressHandler;
             obj.MainFigure.SizeChangedFcn = @obj.ResizeHandler;
@@ -378,6 +384,18 @@ classdef VideoBrowser < handle
                         return
                     end
                     navigationData = zeros(1, obj.getNumFrames());
+                elseif ischar(obj.NavigationDataFunction)
+                        switch obj.NavigationDataFunction
+                            case 'audio'
+                                try
+                                    navigationData = audioread(obj.VideoPath);
+                                catch
+                                    warning('No audio found');
+                                    navigationData = zeros(1, obj.getNumFrames());
+                                end
+                            case 'spectrogram'
+                                navigationData = zeros(1, obj.getNumFrames());
+                        end
                 else
                     if isempty(obj.VideoData)
                         return;
@@ -388,12 +406,13 @@ classdef VideoBrowser < handle
                 navigationData = obj.NavigationData;
             end
             obj.clearNavigationData();
-            p = plot(obj.NavigationAxes, [1, length(navigationData)], obj.NavigationAxes.YLim);
+            numFrames = obj.getNumFrames();
+            p = plot(obj.NavigationAxes, [1, numFrames], obj.NavigationAxes.YLim);
             delete(p);
             obj.NavigationAxes.Colormap = obj.Colormap;
-            linec(1:length(navigationData), navigationData, 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
+            linec((1:length(navigationData))*(numFrames/length(navigationData)), navigationData, 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
 %             scatter(1:length(navigationData), navigationData, 1, obj.NavigationColor, '.', 'Parent', obj.NavigationAxes);
-            obj.NavigationAxes.XLim = [1, length(navigationData)];
+            obj.NavigationAxes.XLim = [1, numFrames];
         end
         function frameData = getCurrentVideoFrameData(obj)
             % Extract the current frame's video data
@@ -464,23 +483,29 @@ classdef VideoBrowser < handle
                 obj.NumColorChannels = 1;
             end
         end
-        function set.VideoData(obj, newVideoData)
-            % Setter for the VideoData property
-
+        function newVideoData = prepareNewVideoData(obj, newVideoData)
             if ischar(newVideoData)
                 % User has provided a filepath instead of the actual video
                 % data - load it.
-                newVideoData = loadVideoData(newVideoData);
+                obj.VideoPath = newVideoData;
+                newVideoData = loadVideoData(obj.VideoPath);
                 switch ndims(newVideoData)
                     case 3
                         newVideoData = permute(newVideoData, [3, 1, 2]);
                     case 4
                         newVideoData = permute(newVideoData, [4, 1, 2, 3]);
                 end
+            else
+                obj.VideoPath = '';
             end
+        end
+        function set.VideoData(obj, newVideoData)
+            % Setter for the VideoData property
+
+            newVideoData = obj.prepareNewVideoData(newVideoData);
             obj.VideoData = newVideoData;
-            obj.setCurrentFrameNum(1);
             obj.updateNumColorChannels();
+            obj.setCurrentFrameNum(1);
             obj.drawNavigationData();
         end
         function set.NavigationDataFunction(obj, newNavigationDataFunction)
@@ -617,8 +642,7 @@ classdef VideoBrowser < handle
         function frameNum = mapFigureXToFrameNum(obj, x)
             % Convert a figure x coordinate to frame number based on the
             %   NavigationAxes position.
-            
-            frameNum = round((x - obj.NavigationAxes.Position(1)) * diff(obj.NavigationAxes.XLim) / obj.NavigationAxes.Position(3));
+            frameNum = round((x - obj.NavigationAxes.Position(1)) * diff(obj.NavigationAxes.XLim) / obj.NavigationAxes.Position(3) + obj.NavigationAxes.XLim(1));
         end
         function cancelZoom(obj)
             obj.IsZooming = false;
@@ -656,6 +680,26 @@ classdef VideoBrowser < handle
 
             x = (obj.MainFigure.CurrentPoint(1, 1) - panelX0) / panelW;
             y = (obj.MainFigure.CurrentPoint(1, 2) - panelY0) / panelH;
+        end
+        function ScrollHandler(obj, ~, evt)
+            [x, y] = obj.GetCurrentVideoPanelPoint();
+            if obj.inNavigationAxes(x, y)
+                scrollCount = evt.VerticalScrollCount;
+                zoomFactor = 2^scrollCount;
+                currentXLim = obj.NavigationAxes.XLim;
+                obj.CurrentFrameNum
+                oldRange = diff(currentXLim);
+                newRange = oldRange*zoomFactor;
+                newXLim = [obj.CurrentFrameNum-newRange/2, obj.CurrentFrameNum+newRange/2];
+                if newXLim(1) < 1
+                    newXLim(1) = 1;
+                end
+                numFrames = obj.getNumFrames();
+                if newXLim(2) > numFrames
+                    newXLim(2) = numFrames;
+                end
+                obj.NavigationAxes.XLim = newXLim;
+            end
         end
         function MouseMotionHandler(obj, ~, ~)
             % Handle mouse motion events
