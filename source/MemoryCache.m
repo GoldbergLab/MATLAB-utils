@@ -97,6 +97,19 @@ classdef MemoryCache < handle
                 end
             end
         end
+        function cacheLength = getCacheLength(obj)
+            cacheLength = sum(obj.Cached);
+        end
+        function cacheBytes = getCacheBytes(obj)
+            cacheBytes = sum(obj.ElementBytes);
+        end
+        function clearCache(obj)
+            obj.Cache = {};
+            obj.Cached = logical.empty();
+            obj.ElementBytes = [];
+            obj.AccessLog = [];
+            obj.AccessCount = 1;
+        end
     end
     methods (Access = private)
         function expandCache(obj, index)

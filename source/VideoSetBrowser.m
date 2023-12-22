@@ -4,18 +4,25 @@ classdef VideoSetBrowser < VideoBrowser
         VideoDirectoryPanel         matlab.ui.container.Panel
         VideoDirectoryLabel         matlab.ui.control.UIControl
         VideoIndexChangeListener    event.proplistener
+        VideoCache                  MemoryCache
     end
     properties
         VideoDirectory              char = ''
+        VideoFilter                 char = ''
     end
     properties (Transient)
     end
     properties (SetObservable, Access = private)
     end
     methods
-        function obj = VideoSetBrowser(videoDirectory, varargin)
+        function obj = VideoSetBrowser(videoDirectory, videoFilter, varargin)
             obj@VideoBrowser('', varargin{:});
+            if ~exist('videoFilter', 'var') || isempty(videoFilter)
+                videoFilter = '.*\.[aAvViI]';
+            end
+            obj.VideoCache = MemoryCache(5);
             obj.VideoDirectory = videoDirectory;
+            obj.VideoFilter = videoFilter;
             obj.UpdateVideoList();
             obj.HandleVideoIndexChange();
         end
@@ -52,7 +59,13 @@ classdef VideoSetBrowser < VideoBrowser
             obj.VideoDirectoryList.Enable = "off";
 
             % Set the new video data
-            obj.VideoData = selectedPath;
+            if obj.VideoCache.isCached(videoIndex)
+                obj.VideoData = obj.VideoCache.retrieveElement(videoIndex);
+            else
+                obj.VideoData = selectedPath;
+                % Cache video
+                obj.VideoCache.storeElement(videoIndex, obj.VideoData);
+            end
 
             % Reenable list box after loading
             obj.VideoDirectoryList.Enable = "on";
@@ -64,7 +77,7 @@ classdef VideoSetBrowser < VideoBrowser
             obj.VideoDirectoryLabel.String = ['Path: ', abbreviateText(obj.VideoDirectory, 20, 0.25)];
         end
         function UpdateVideoList(obj)
-            [videoPaths, videoNames] = findFilesByRegex(obj.VideoDirectory, '.*?([^\\]+.avi)', false, false);
+            [videoPaths, videoNames] = findFilesByRegex(obj.VideoDirectory, obj.VideoFilter, false, false);
             obj.VideoDirectoryList.String = videoNames;
             obj.VideoDirectoryList.UserData = videoPaths;
             
@@ -72,5 +85,8 @@ classdef VideoSetBrowser < VideoBrowser
         function ScrollWheelHandler(obj, src, evt)
             evt.VerticalScrollCount;
         end
+%         function setVideoData(obj, newVideoData)
+%             setVideoData@VideoBrowser(obj, newVideoData);
+%         end
     end
 end
