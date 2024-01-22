@@ -24,7 +24,7 @@ classdef VideoSetBrowser < VideoBrowser
             obj.VideoDirectory = videoDirectory;
             obj.VideoFilter = videoFilter;
             obj.UpdateVideoList();
-            obj.HandleVideoIndexChange();
+%            obj.HandleVideoIndexChange();
         end
         function createDisplayArea(obj)
             createDisplayArea@VideoBrowser(obj);
@@ -41,7 +41,7 @@ classdef VideoSetBrowser < VideoBrowser
             obj.VideoDirectoryLabel.FontSize = 12;
 
             obj.MainFigure.Name = 'Video Set Browser';
-            obj.MainFigure.WindowScrollWheelFcn = @obj.ScrollWheelHandler;
+            obj.MainFigure.WindowScrollWheelFcn = @obj.ScrollHandler;
 
             obj.UpdateVideoDirectoryLabel();
             obj.UpdateVideoList();
@@ -60,11 +60,13 @@ classdef VideoSetBrowser < VideoBrowser
 
             % Set the new video data
             if obj.VideoCache.isCached(videoIndex)
-                obj.VideoData = obj.VideoCache.retrieveElement(videoIndex);
+                AVData = obj.VideoCache.retrieveElement(videoIndex);
+                obj.VideoData = AVData{1};
+                obj.AudioData = AVData{2};
             else
                 obj.VideoData = selectedPath;
                 % Cache video
-                obj.VideoCache.storeElement(videoIndex, obj.VideoData);
+                obj.VideoCache.storeElement(videoIndex, {obj.VideoData, obj.AudioData});
             end
 
             % Reenable list box after loading
@@ -72,6 +74,9 @@ classdef VideoSetBrowser < VideoBrowser
 
             % Reset zoom
             obj.ZoomVideoAxes()
+
+            % Redraw navigation data
+            obj.drawNavigationData();
         end
         function UpdateVideoDirectoryLabel(obj)
             obj.VideoDirectoryLabel.String = ['Path: ', abbreviateText(obj.VideoDirectory, 20, 0.25)];
@@ -82,7 +87,8 @@ classdef VideoSetBrowser < VideoBrowser
             obj.VideoDirectoryList.UserData = videoPaths;
             
         end
-        function ScrollWheelHandler(obj, src, evt)
+        function ScrollHandler(obj, src, evt)
+            ScrollHandler@VideoBrowser(obj, src, evt);
             evt.VerticalScrollCount;
         end
 %         function setVideoData(obj, newVideoData)
