@@ -35,7 +35,8 @@ classdef VideoBrowser < handle
         VideoFrame              matlab.graphics.primitive.Image     % An image object containing the video frame image
         FrameMarker             matlab.graphics.primitive.Line      % A line on the NavigationAxes marking what frame is displayed
         FrameNumberMarker       matlab.graphics.primitive.Text      % Text on the NavigationAxes indicating what frame number is displayed
-        PlayJob                 timer                               % A timer for playing the video
+%         VideoPlayJob            timer                               % A timer for playing the video
+        AVPlayer                audioplayer                         % An object for playing the audio and video
         PlayIncrement           double = 1                          % Number of frames the play timer will advance by on each call.
         NumColorChannels        double                              % Number of color channels in the video (1 for grayscale, 3 for color)
         NavigationRedrawEnable  logical = false                     % Enable or disable navigation redraw
@@ -50,9 +51,9 @@ classdef VideoBrowser < handle
         VideoFrameRate          double = 30
         AudioSampleRate         double = 44100
         NavigationZoom          double = 1
-        NavigationScrollMode    char = 'centered'                   % How should navigation axes scroll when zoomed in? One of 'centered' (keep cursor centered), 'partial' (keep cursor within a margin), 'none' (no scrolling)
+        NavigationScrollMode    char = 'partial'                   % How should navigation axes scroll when zoomed in? One of 'centered' (keep cursor centered), 'partial' (keep cursor within a margin), 'none' (no scrolling)
         ShiftKeyDown            logical = false
-        AudioChannelMode        char = 'all'                        % Which audio channels should be displayed when navigation function is 'audio' or 'spectrogram'. One of 'all', 'first', or a scalar/vector of channel indices
+        ChannelMode        char = 'all'                             % For multichannel navigation data, which channels should be displayed when navigation function is 'audio' or 'spectrogram'. One of 'all', 'first', or a scalar/vector of channel indices
     end
     properties
         MainFigure          matlab.ui.Figure            % The main figure window
@@ -145,25 +146,22 @@ classdef VideoBrowser < handle
                             error('Wrong number of color channels: %d', obj.NumColorChannels);
                     end
                     obj.NavigationMapMode = 'frame';
+                    obj.NavigationData = [];
                     switch NavigationDataOrFcn
                         case 'sum'
-                            obj.NavigationData = [];
                             obj.NavigationDataFunction = @(videoData)sum(videoData, sumDims);
                         case 'diff'
-                            obj.NavigationData = [];
                             obj.NavigationDataFunction = @(videoData)smooth(sum(diff(videoData, 1), sumDims), 10);
                         case 'compactness'
-                            obj.NavigationData = [];
                             obj.NavigationDataFunction = @(videoData)sum(videoData, sumDims) ./ sum(getMaskSurface(videoData), sumDims);
                         case 'audio'
                             obj.NavigationMapMode = 'time';
                             obj.FrameMarkerColor = 'black';
-                            obj.NavigationData = [];
+                            obj.NavigationData = obj.AudioData;
                             obj.NavigationDataFunction = NavigationDataOrFcn;
                         case 'spectrogram'
                             obj.NavigationMapMode = 'time';
                             obj.FrameMarkerColor = 'white';
-                            obj.NavigationData = [];
                             obj.NavigationDataFunction = NavigationDataOrFcn;
                         otherwise
                             error('Unrecognized named navigation data function: %s.', NavigationDataOrFcn);
@@ -190,15 +188,17 @@ classdef VideoBrowser < handle
             if obj.PlaybackSpeed < 0
                 obj.PlayIncrement = -1;
             else
-                obj.PlayIncrement  = 1;
+                obj.PlayIncrement = 1;
             end
-            delete(obj.PlayJob);
-            obj.PlayJob = timer();
-            obj.PlayJob.TimerFcn = @(~, ~)obj.playFcn(selectedOnly);
-            obj.PlayJob.Period = 1 / abs(obj.PlaybackSpeed);
-            obj.PlayJob.ExecutionMode = 'fixedRate';
-            obj.PlayJob.UserData.selectedOnly = selectedOnly;
-            obj.PlayJob.start();
+            delete(obj.AVPlayer);
+            currentAudioSample = obj.getCurrentAudioSample();
+            audioData = obj.AudioData(:, currentAudioSample:end)';
+            obj.AVPlayer = audioplayer(audioData, obj.AudioSampleRate);
+            obj.AVPlayer.TimerFcn = @(~, ~)obj.playFcn(selectedOnly);
+            obj.AVPlayer.TimerPeriod = 1 / abs(obj.PlaybackSpeed);
+%             obj.VideoPlayJob.ExecutionMode = 'fixedRate';
+            obj.AVPlayer.UserData.selectedOnly = selectedOnly;
+            obj.AVPlayer.play();
             warning('on', 'MATLAB:TIMER:RATEPRECISION');
             warning('on', 'MATLAB:timer:miliSecPrecNotAllowed');
         end
@@ -217,8 +217,8 @@ classdef VideoBrowser < handle
                     case {'images:imshow:invalidAxes', 'MATLAB:VideoBrowser:noSelection'}
                         % Axes are missing, we're probably shutting down.
                         % Stop and delete timer.
-                        stop(obj.PlayJob);
-                        delete(obj.PlayJob);
+                        stop(obj.AVPlayer);
+                        delete(obj.AVPlayer);
                     otherwise
                         throw(me);
                 end
@@ -227,13 +227,13 @@ classdef VideoBrowser < handle
         function stopVideo(obj)
             % Stop video playback
 
-            stop(obj.PlayJob);
-            delete(obj.PlayJob);
+            stop(obj.AVPlayer);
+            delete(obj.AVPlayer);
         end
         function playing = isPlaying(obj)
             % Check if video is currently playing
 
-            playing = ~isempty(obj.PlayJob) && isvalid(obj.PlayJob) && strcmp(obj.PlayJob.Running, 'on');
+            playing = ~isempty(obj.AVPlayer) && isvalid(obj.AVPlayer) && strcmp(obj.AVPlayer.Running, 'on');
         end
         function incrementFrame(obj, delta)
             % Increment the current frame by delta
@@ -249,6 +249,12 @@ classdef VideoBrowser < handle
                 nextFrameNum = obj.findNextSelectedFrameNum(nextFrameNum, delta);
             end
             obj.CurrentFrameNum = nextFrameNum;
+        end
+        function audioSample = getCurrentAudioSample(obj)
+            audioSample = obj.convertFrameNumberToAudioSample(obj.CurrentFrameNum);
+        end
+        function audioSample = convertFrameNumberToAudioSample(obj, frameNum)
+            audioSample = round((frameNum - 1) * obj.AudioSampleRate / obj.VideoFrameRate) + 1;
         end
         function nextFrame = findNextSelectedFrameNum(obj, currentFrame, direction)
             % Find next frame after currentFrame in the direction specified
@@ -383,11 +389,77 @@ classdef VideoBrowser < handle
                 end
             end
         end
+        function updateNavigationXLim(obj)
+            numSamples = size(obj.NavigationData, 2);
+
+            % Calculate xlim
+            switch obj.NavigationMapMode
+                case 'frame'
+                    fullTLim = [0, numSamples];
+                case 'time'
+                    fullTLim = [0, numSamples / obj.AudioSampleRate];
+            end
+            xCenter = obj.mapFrameNumToAxesX(obj.CurrentFrameNum);
+            currentTLim = xlim(obj.NavigationAxes);
+            currentXFraction = (xCenter - currentTLim(1)) / diff(currentTLim);
+            tWidth = diff(fullTLim) * obj.NavigationZoom;
+            switch obj.NavigationScrollMode
+                case 'centered'
+                    newTLim = [xCenter - tWidth*0.5, xCenter + tWidth*0.5];
+                case 'partial'
+                    margin = 0.2; % How close to edge cursor is before beginning to scroll axes (expressed as fraction of whole width)
+                    if currentXFraction < margin
+                        currentXFraction = margin;
+                    end
+                    if currentXFraction > (1-margin)
+                        currentXFraction = (1-margin);
+                    end
+                    newTLim = [xCenter - tWidth*currentXFraction, xCenter + tWidth*(1-currentXFraction)];
+                case 'none'
+                    newTLim = [xCenter - tWidth*currentXFraction, xCenter + tWidth*(1-currentXFraction)];
+            end
+            if min(newTLim) < 0
+                % Prevent start of data from displaying anywhere except
+                % left edge of axes
+                newTLim = newTLim - min(newTLim);
+            end
+            if max(newTLim) > max(fullTLim)
+                % Prevent end of data from displaying anywhere except
+                % right edge of axes
+                newTLim = newTLim - (max(newTLim) - max(fullTLim));
+            end
+            xlim(obj.NavigationAxes, newTLim);            
+        end
+        function updateNavigationData(obj)
+            if ischar(obj.NavigationDataFunction) && ~isempty(obj.NavigationDataFunction)
+                % Navigation data function is a char array - must be a
+                % named function
+                switch obj.NavigationDataFunction
+                    case {'audio', 'spectrogram'}
+                        obj.NavigationData = obj.AudioData;
+                    otherwise
+                        error('Unknown named navigation function: %s', obj.NavigationDataFunction);
+                end
+            else
+                if ~isempty(obj.VideoData)
+                    obj.NavigationData = obj.NavigationDataFunction(obj.VideoData);
+                end
+            end
+
+            if isempty(obj.NavigationData)
+                % Fallback null nav data
+                obj.NavigationData = zeros(1, obj.getNumFrames());
+            end
+
+            if size(obj.NavigationData, 1) > size(obj.NavigationData, 2)
+                % Ensure channel # is first dimension
+                obj.NavigationData = obj.NavigationData';
+            end
+        end
         function drawNavigationData(obj, replot)
             % Draw the NavigationData on the NavigationAxes. If only a
             %   NavigationDataFunction is provide, it will be used here to
             %   generate NavigationData
-
             if ~exist('replot', 'var') || isempty(replot)
                 replot = true;
             end
@@ -396,36 +468,32 @@ classdef VideoBrowser < handle
                 return;
             end
             
-            if isempty(obj.NavigationData)
-                if isempty(obj.NavigationDataFunction)
-                    % No navigation data or a function to create it.
-                    if isempty(obj.VideoData)
-                        % No navigation data, function, or video!
-                        return
-                    end
-                    navigationData = zeros(1, obj.getNumFrames());
-                elseif ischar(obj.NavigationDataFunction)
-                    switch obj.NavigationDataFunction
-                        case {'audio', 'spectrogram'}
-                            navigationData = obj.AudioData;
-%                                 navigationData = zeros(1, obj.getNumFrames());
-                    end
-                else
-                    if isempty(obj.VideoData)
-                        return;
-                    end
-                    navigationData = obj.NavigationDataFunction(obj.VideoData);
-                end
-            else
-                navigationData = obj.NavigationData;
+            obj.updateNavigationData();
+
+            obj.updateNavigationXLim();
+
+            numSamples = size(obj.NavigationData, 2);
+            numChannels = size(obj.NavigationData, 1);
+            % Determine which channels to display
+            switch obj.ChannelMode
+                case 'all'
+                    % Display all channels
+                    channelList = 1:numChannels;
+                case 'first'
+                    % Display only first channel
+                    channelList = 1;
+                case isnumeric(obj.ChannelMode)
+                    % Display channels specified by obj.ChannelMode,
+                    % interpreted as a vector of channel indices
+                    channelList = obj.ChannelMode;
+                otherwise
+                    error('Channel mode not recognized: %s', obj.ChannelMode);
             end
 
-            if isempty(navigationData)
+            if isempty(obj.NavigationData)
                 obj.clearNavigationData();
             elseif strcmp(obj.NavigationDataFunction, 'spectrogram')
                 % User requested spectrogram of audio data
-                numChannels = size(navigationData, 2);
-                numSamples = size(navigationData, 1);
                 fullTLim = [0, numSamples / obj.AudioSampleRate];
                 flim = [50, 7500];
                 clim = [13.0000, 24.5000];
@@ -443,23 +511,11 @@ classdef VideoBrowser < handle
                     nCourse = 1;
                     tSize = pixSize(3) / nCourse;
                     hold(obj.NavigationAxes, 'on');
-
-                    % Determine which audio channels to display
-                    switch obj.AudioChannelMode
-                        case 'all'
-                            channelList = 1:numChannels;
-                        case 'first'
-                            channelList = 1;
-                        case isnumeric(obj.AudioChannelMode)
-                            channelList = obj.AudioChannelMode;
-                        otherwise
-                            error('Audio channel mode not recognized: %s', obj.AudioChannelMode);
-                    end
                     
                     for channel = channelList
                         % Loop over each channel in audio, creating stacked
                         % spectrograms
-                        audio = navigationData(:, channel)';
+                        audio = obj.NavigationData(channel, :);
                     
                         power = getAudioSpectrogram(audio, obj.AudioSampleRate, flim, tSize);
                         nFreqBins = size(power, 1);
@@ -469,29 +525,9 @@ classdef VideoBrowser < handle
                         f = linspace(flim(1)+freqShift,flim(2)+freqShift,nFreqBins);
         
                         imagesc(t,f,power, 'Parent', obj.NavigationAxes);
-                            
-    %                     vb.NavigationAxes.XLim = vb.NavigationAxes.XLim * frameRate;
-    %                     spectrogramImage.XData = spectrogramImage.XData * frameRate;
                     end
                 end
 
-                xCenter = obj.mapFrameNumToAxesX(obj.CurrentFrameNum);
-                currentTLim = xlim(obj.NavigationAxes);
-                currentXFraction = (xCenter - currentTLim(1)) / diff(currentTLim);
-                tWidth = diff(fullTLim) * obj.NavigationZoom;
-                newTLim = [xCenter - tWidth*currentXFraction, xCenter + tWidth*(1-currentXFraction)];
-                if min(newTLim) < 0
-                    % Prevent start of data from displaying anywhere except
-                    % left edge of axes
-                    newTLim = newTLim - min(newTLim);
-                end
-                if max(newTLim) > max(fullTLim)
-                    % Prevent end of data from displaying anywhere except
-                    % right edge of axes
-                    newTLim = newTLim - (max(newTLim) - max(fullTLim));
-                end
-                
-                xlim(obj.NavigationAxes, newTLim);
                 ylim(obj.NavigationAxes, [flim(1), flim(2) + fWidth*(numChannels-1)]);
                 
                 set(obj.NavigationAxes, 'YDir', 'normal');
@@ -505,15 +541,40 @@ classdef VideoBrowser < handle
                 hold(obj.NavigationAxes, 'off');
             else
                 numFrames = obj.getNumFrames();
-                p = plot(obj.NavigationAxes, [1, numFrames], obj.NavigationAxes.YLim);
-                delete(p);
+
                 obj.NavigationAxes.Colormap = obj.Colormap;
+                dataRange = max(max(obj.NavigationData, [], 2) - min(obj.NavigationData, [], 2));
+                dataSpacing = dataRange * 1.1;
                 if replot
+                    originalXLim = obj.NavigationAxes.XLim;
+                    originalYLim = obj.NavigationAxes.YLim;
+
+                    % Data needs to actually be redrawn
                     obj.clearNavigationData();
-                    linec((1:length(navigationData))*(numFrames/length(navigationData)), navigationData, 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
-        %             scatter(1:length(navigationData), navigationData, 1, obj.NavigationColor, '.', 'Parent', obj.NavigationAxes);
+
+                    % Stupid hack to force MATLAB to draw axes background
+                    p = plot(obj.NavigationAxes, originalXLim, originalYLim);
+                    delete(p);
+                    
+                    obj.NavigationAxes.XLim = originalXLim;
+                    obj.NavigationAxes.YLim = originalYLim;
+
+                    if strcmp(obj.NavigationDataFunction, 'audio')
+                        % If we're plotting the audio, scale based on audio
+                        % sample rate
+                        t = (1:numSamples) / obj.AudioSampleRate;
+                    else
+                        % Assume there is one sample per frame
+                        t = (1:numSamples)*(numFrames/numSamples);
+                    end
+
+                    for channel = channelList
+                        linec(t, obj.NavigationData(channel, :) + dataSpacing*(channel-1), 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
+            %             scatter(1:length(navigationData), navigationData, 1, obj.NavigationColor, '.', 'Parent', obj.NavigationAxes);
+                    end
+                minY = min(obj.NavigationData(1, :));
+                ylim(obj.NavigationAxes, [minY, minY + dataRange + dataSpacing*(numChannels-1)])
                 end
-                obj.NavigationAxes.XLim = [1, numFrames];
             end
         end
         function frameData = getCurrentVideoFrameData(obj)
@@ -560,7 +621,7 @@ classdef VideoBrowser < handle
 
             % Update frame number label
             scale = obj.getFrameToAxesUnitScale();
-            frameNumberString = sprintf('%0.2', x);
+            frameNumberString = sprintf('%0.2f', x);
             if isempty(obj.FrameNumberMarker) || ~isvalid(obj.FrameNumberMarker)
                 obj.FrameNumberMarker = text(obj.NavigationAxes, x + 20/scale, mean(obj.NavigationAxes.YLim), frameNumberString, 'Color', obj.FrameMarkerColor);
             else
@@ -574,7 +635,15 @@ classdef VideoBrowser < handle
             for k = 1:length(obj.FrameSelectionHandles)
                 delete(obj.FrameSelectionHandles(k));
             end
-            obj.FrameSelectionHandles = highlight_plot(obj.NavigationAxes, obj.FrameSelection, obj.FrameSelectionColor);
+
+            switch obj.NavigationMapMode
+                case 'frame'
+                    scale = 1;
+                case 'time'
+                    scale = obj.AudioSampleRate;
+            end
+            highlight_x = linspace(1, size(obj.NavigationData, 2) / scale, obj.getNumFrames());
+            obj.FrameSelectionHandles = highlight_plot(obj.NavigationAxes, highlight_x, obj.FrameSelection, obj.FrameSelectionColor);
         end
         function set.VideoFrameRate(obj, frameRate)
             obj.VideoFrameRate = frameRate;
@@ -609,12 +678,16 @@ classdef VideoBrowser < handle
                 end
                 videoInfo = getVideoInfo(obj.VideoPath);
                 obj.VideoFrameRate = videoInfo.frameRate;
+                obj.PlaybackSpeed = obj.VideoFrameRate;
                 try
                     [obj.AudioData, obj.AudioSampleRate] = audioread(obj.VideoPath);
+                    obj.AudioData = obj.AudioData';
                 catch ME
                     switch ME.identifier
                         case 'MATLAB:audiovideo:audioread:NoAudio'
-                            % No audio in video
+                            % No audio in video - create blank audio
+                            obj.AudioSampleRate = 44100;
+                            obj.AudioData = zeros(1, round(obj.getNumFrames() * obj.AudioSampleRate / obj.VideoFrameRate));
                         otherwise
                             rethrow(ME);
                     end
@@ -642,7 +715,7 @@ classdef VideoBrowser < handle
             % Setter for the NavigationData property
             
             obj.NavigationData = newNavigationData;
-            obj.drawNavigationData();
+%             obj.drawNavigationData();
         end
         function set.NavigationColor(obj, newNavigationColor)
             % Setter for the NavigationColor property
@@ -660,12 +733,13 @@ classdef VideoBrowser < handle
             obj.updateVideoFrame();
             obj.updateFrameMarker();
         end
+
         function set.FrameMarkerColor(obj, newColor)
             obj.FrameMarkerColor = newColor;
             obj.updateFrameMarker(true);
         end
         function selectedOnly = IsPlayingSelectedOnly(obj)
-            selectedOnly = obj.PlayJob.UserData.selectedOnly;
+            selectedOnly = obj.AVPlayer.UserData.selectedOnly;
         end
         function set.PlaybackSpeed(obj, fps)
             if abs(fps) > 1000
@@ -845,6 +919,14 @@ classdef VideoBrowser < handle
                     shiftAmount = diff(currentTLim) * shiftFraction * scrollCount;
                     newTLim = currentTLim + shiftAmount;
                     xlim(obj.NavigationAxes, newTLim);
+                    
+                    % Update video frame too
+                    frameNum = obj.mapFigureXToFrameNum(x);
+                    if ~obj.isPlaying()
+                        % Do not change frame during mouseover if video is
+                        % playing
+                        obj.CurrentFrameNum = frameNum;
+                    end
                 else
                     % Zoom in or out
                     zoomFactor = 2^scrollCount;
@@ -888,7 +970,11 @@ classdef VideoBrowser < handle
             end
             if obj.inNavigationAxes(x, y)
                 frameNum = obj.mapFigureXToFrameNum(x);
-                obj.CurrentFrameNum = frameNum;
+                if ~obj.isPlaying()
+                    % Do not change frame during mouseover if video is
+                    % playing
+                    obj.CurrentFrameNum = frameNum;
+                end
                 if obj.IsSelectingFrames && obj.FrameSelectStart > 0 && frameNum > 0
                     selectBounds = sort([obj.FrameSelectStart, frameNum]);
                     switch obj.MainFigure.SelectionType
@@ -901,12 +987,24 @@ classdef VideoBrowser < handle
             end
         end
         function MouseDownHandler(obj, src, ~)
+            % Handle user mouse click
             x = src.CurrentPoint(1, 1);
             y = src.CurrentPoint(1, 2);
             if obj.inNavigationAxes(x, y)
+                % Mouse click is in navigation axes
                 frameNum = obj.mapFigureXToFrameNum(x);
                 obj.FrameSelectStart = frameNum;
                 obj.IsSelectingFrames = true;
+
+                % Set current frame to the click location
+                obj.CurrentFrameNum = frameNum;
+                if obj.isPlaying()
+                    % If video is currently playing, restart player
+                    selectedOnly = obj.IsPlayingSelectedOnly();
+                    obj.stopVideo();
+                    obj.playVideo(selectedOnly);
+                end
+                
             end
         end
         function MouseUpHandler(obj, ~, ~)
@@ -1011,10 +1109,10 @@ classdef VideoBrowser < handle
             obj.updateFrameMarker(true);
         end
         function delete(obj)
-            if isvalid(obj.PlayJob)
-                stop(obj.PlayJob);
+            if isvalid(obj.AVPlayer)
+                stop(obj.AVPlayer);
             end
-            delete(obj.PlayJob);
+            delete(obj.AVPlayer);
             obj.deleteDisplayArea();
         end
     end
