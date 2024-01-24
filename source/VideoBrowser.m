@@ -139,11 +139,13 @@ classdef VideoBrowser < handle
                 case 'char'
                     switch obj.NumColorChannels
                         case 3
-                            sumDims = [2, 3, 4];
+                            frameDim = 4;
+                            sumDims = [1, 2, 3];
                         case 1
-                            sumDims = [2, 3];
+                            frameDim = 3;
+                            sumDims = [1, 2];
                         otherwise
-                            error('Wrong number of color channels: %d', obj.NumColorChannels);
+                            error('Invalid number of color channels: %d', obj.NumColorChannels);
                     end
                     obj.NavigationMapMode = 'frame';
                     obj.NavigationData = [];
@@ -151,7 +153,7 @@ classdef VideoBrowser < handle
                         case 'sum'
                             obj.NavigationDataFunction = @(videoData)sum(videoData, sumDims);
                         case 'diff'
-                            obj.NavigationDataFunction = @(videoData)smooth(sum(diff(videoData, 1), sumDims), 10);
+                            obj.NavigationDataFunction = @(videoData)smooth(sum(diff(videoData, frameDim), sumDims), 10);
                         case 'compactness'
                             obj.NavigationDataFunction = @(videoData)sum(videoData, sumDims) ./ sum(getMaskSurface(videoData), sumDims);
                         case 'audio'
@@ -172,7 +174,7 @@ classdef VideoBrowser < handle
                 otherwise
                     error('NavigationDataOrFcn argument must be of type function_handle, char, double, or uint8, not %s.', class(NavigationDataOrFcn));
             end
-            obj.FrameSelection = false(1, size(obj.VideoData, 1));
+            obj.FrameSelection = false(1, size(obj.VideoData, ndims(obj.VideoData)));
             obj.NavigationRedrawEnable = true;
             obj.drawNavigationData();
 
@@ -586,9 +588,9 @@ classdef VideoBrowser < handle
 
             switch obj.NumColorChannels
                 case 3
-                    frameData = squeeze(obj.VideoData(obj.CurrentFrameNum, :, :, :));
+                    frameData = obj.VideoData(:, :, :, obj.CurrentFrameNum);
                 case 1
-                    frameData = squeeze(obj.VideoData(obj.CurrentFrameNum, :, :));
+                    frameData = obj.VideoData(:, :, obj.CurrentFrameNum);
                 otherwise
                     error('Wrong number of color channels: %d', obj.NumColorChannels);
             end
@@ -596,7 +598,7 @@ classdef VideoBrowser < handle
         function numFrames = getNumFrames(obj)
             % Determine the number of frames in the current VideoData
             
-            numFrames = size(obj.VideoData, 1);
+            numFrames = size(obj.VideoData, ndims(obj.VideoData));
         end
         function updateFrameMarker(obj, varargin)
             % Update the FrameMarker and FrameNumberMarker on the
@@ -656,7 +658,7 @@ classdef VideoBrowser < handle
         end
         function updateNumColorChannels(obj)
             if ndims(obj.VideoData) == 4
-                if size(obj.VideoData, 4) ~= 3
+                if size(obj.VideoData, 3) ~= 3
                     error('Incorrect video color dimension size: 4D videos must have the dimension order N x H x W x 3.');
                 end
                 obj.NumColorChannels = 3;
@@ -669,13 +671,8 @@ classdef VideoBrowser < handle
                 % User has provided a filepath instead of the actual video
                 % data - load it.
                 obj.VideoPath = newVideoData;
-                newVideoData = loadVideoData(obj.VideoPath);
-                switch ndims(newVideoData)
-                    case 3
-                        newVideoData = permute(newVideoData, [3, 1, 2]);
-                    case 4
-                        newVideoData = permute(newVideoData, [4, 1, 2, 3]);
-                end
+                makeGrayscale = false;
+                newVideoData = loadVideoData(obj.VideoPath, makeGrayscale);
                 videoInfo = getVideoInfo(obj.VideoPath);
                 obj.VideoFrameRate = videoInfo.frameRate;
                 obj.PlaybackSpeed = obj.VideoFrameRate;
@@ -776,7 +773,7 @@ classdef VideoBrowser < handle
             end
         end
         function clearSelection(obj)
-            obj.FrameSelection = false(1, size(obj.VideoData, 1));
+            obj.FrameSelection = false(1, size(obj.VideoData, ndims(obj.VideoData)));
         end
         function [x, y] = getCurrentVideoPoint(obj)
             x = round(obj.VideoAxes.CurrentPoint(1, 1));
@@ -947,7 +944,15 @@ classdef VideoBrowser < handle
             if obj.inVideoAxes(x, y)
                 [x, y] = obj.getCurrentVideoPoint();
                 if x > 0 && y > 0 && ~isempty(obj.VideoFrame) && x <= obj.VideoFrame.XData(2) && y <= obj.VideoFrame.YData(2)
-                    obj.CoordinateDisplay.String = sprintf('%d, %d = %s', x, y, num2str(obj.VideoData(obj.CurrentFrameNum, y, x, :)));
+                    switch obj.NumColorChannels
+                        case 1
+                            val = num2str(obj.VideoData(y, x, obj.CurrentFrameNum));
+                        case 3
+                            val = num2str(obj.VideoData(y, x, :, obj.CurrentFrameNum));
+                        otherwise
+                            error('Invalid number of color channels');
+                    end
+                    obj.CoordinateDisplay.String = sprintf('%d, %d = %s', x, y, val);
                 else
                     obj.CoordinateDisplay.String = '';
                 end
@@ -1077,9 +1082,9 @@ classdef VideoBrowser < handle
 
                         % Select frames and permute to match dim convention
                         if ndims(obj.VideoData) == 4
-                            videoData = permute(obj.VideoData(selection, :, :, :), [2, 3, 4, 1]);
+                            videoData = obj.VideoData(:, :, :, selection);
                         else
-                            videoData = permute(obj.VideoData(selection, :, :), [2, 3, 1]);
+                            videoData = obj.VideoData(:, :, selection);
                         end
 
                         % Get file path to save to from user
