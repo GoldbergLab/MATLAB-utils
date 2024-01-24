@@ -35,31 +35,34 @@ classdef VideoBrowser < handle
         VideoFrame              matlab.graphics.primitive.Image     % An image object containing the video frame image
         FrameMarker             matlab.graphics.primitive.Line      % A line on the NavigationAxes marking what frame is displayed
         FrameNumberMarker       matlab.graphics.primitive.Text      % Text on the NavigationAxes indicating what frame number is displayed
-%         VideoPlayJob            timer                               % A timer for playing the video
         AVPlayer                audioplayer                         % An object for playing the audio and video
         PlayIncrement           double = 1                          % Number of frames the play timer will advance by on each call.
         NumColorChannels        double                              % Number of color channels in the video (1 for grayscale, 3 for color)
         NavigationRedrawEnable  logical = false                     % Enable or disable navigation redraw
-        CoordinateDisplay       matlab.ui.control.UIControl
+        StatusBar               matlab.ui.control.UIControl
         IsZooming               logical = false
         ZoomStart               double = []
         ZoomBox                 matlab.graphics.primitive.Rectangle
         IsSelectingFrames       logical = false
+        IsNavDividerDragging    logical = false
         FrameSelectStart        double
         FrameSelectionHandles   matlab.graphics.primitive.Rectangle
         NavigationMapMode       char = 'frame'                      % Determine how the navigation axis position is mapped to a frame number - either 'frame' or 'time'
         VideoFrameRate          double = 30
         AudioSampleRate         double = 44100
         NavigationZoom          double = 1
-        NavigationScrollMode    char = 'partial'                   % How should navigation axes scroll when zoomed in? One of 'centered' (keep cursor centered), 'partial' (keep cursor within a margin), 'none' (no scrolling)
         ShiftKeyDown            logical = false
-        ChannelMode        char = 'all'                             % For multichannel navigation data, which channels should be displayed when navigation function is 'audio' or 'spectrogram'. One of 'all', 'first', or a scalar/vector of channel indices
+        NavigationDivider       matlab.ui.control.UIControl         % A button to allow user to drag navigation axes larger or smaller
     end
     properties
         MainFigure          matlab.ui.Figure            % The main figure window
         VideoPanel          matlab.ui.container.Panel   % Panel that contains video and nav axes
         VideoAxes           matlab.graphics.axis.Axes   % Axes for displaying the video frame
         NavigationAxes      matlab.graphics.axis.Axes   % Axes for displaying the 1D metric
+    end
+    properties
+        NavigationScrollMode    char = 'partial'     % How should navigation axes scroll when zoomed in? One of 'centered' (keep cursor centered), 'partial' (keep cursor within a margin), 'none' (no scrolling)
+        ChannelMode = 'all'         % For multichannel navigation data, which channels should be displayed when navigation function is 'audio' or 'spectrogram'. One of 'all', 'first', or a scalar/vector of channel indices
     end
     properties (SetObservable)
         VideoData = []                          % The video data itself, a N x H x W double or uint8 array,
@@ -151,11 +154,11 @@ classdef VideoBrowser < handle
                     obj.NavigationData = [];
                     switch NavigationDataOrFcn
                         case 'sum'
-                            obj.NavigationDataFunction = @(videoData)sum(videoData, sumDims);
+                            obj.NavigationDataFunction = @(videoData)squeeze(sum(videoData, sumDims));
                         case 'diff'
-                            obj.NavigationDataFunction = @(videoData)smooth(sum(diff(videoData, frameDim), sumDims), 10);
+                            obj.NavigationDataFunction = @(videoData)smooth(squeeze(sum(diff(videoData, frameDim), sumDims)), 10);
                         case 'compactness'
-                            obj.NavigationDataFunction = @(videoData)sum(videoData, sumDims) ./ sum(getMaskSurface(videoData), sumDims);
+                            obj.NavigationDataFunction = @(videoData)squeeze(sum(videoData, sumDims)) ./ squeeze(sum(getMaskSurface(videoData), sumDims));
                         case 'audio'
                             obj.NavigationMapMode = 'time';
                             obj.FrameMarkerColor = 'black';
@@ -213,6 +216,7 @@ classdef VideoBrowser < handle
                 else
                     obj.incrementFrame(obj.PlayIncrement);
                 end
+                obj.StatusBar.String = sprintf('Playing: Frame = %d / %d, time = %0.3f', obj.CurrentFrameNum, obj.getNumFrames(), obj.CurrentFrameNum / obj.VideoFrameRate);
                 drawnow;
             catch me
                 switch me.identifier
@@ -288,6 +292,7 @@ classdef VideoBrowser < handle
             delete(obj.VideoAxes);
             delete(obj.NavigationAxes);
             delete(obj.MainFigure);
+            delete(obj.NavigationDivider);
         end
         function regenerateGraphics(obj)
             % Recreate graphics in case it gets closed
@@ -298,6 +303,30 @@ classdef VideoBrowser < handle
             obj.updateFrameMarker();
             obj.updateVideoFrame();
         end
+        function setNavigationAxesHeightFraction(obj, fraction)
+            % Adjust the height of the navigation axes based on the
+            % fraction of the height of the figure it should occupy
+            margin = 0.025;
+
+            % Get fixed height for divider and status bar
+            originalUnits = obj.MainFigure.Units;
+            obj.MainFigure.Units = 'pixels';
+            dividerHeight = 10 / obj.MainFigure.Position(4);
+            obj.MainFigure.Units = originalUnits;
+
+            obj.StatusBar.Position =            [0, 0, 1, 0.1];
+            obj.StatusBar.Units = 'characters';
+            obj.StatusBar.Position(4) = 1;
+            obj.StatusBar.Units = 'normalized';
+            statusBarHeight = obj.StatusBar.Position(4);
+
+            obj.NavigationAxes.Position =       [margin, statusBarHeight + margin,  1-2*margin, fraction - 1.5 * margin - statusBarHeight];
+            obj.NavigationDivider.Position =    [margin, fraction-dividerHeight/2,  1-2*margin, dividerHeight];
+            obj.VideoAxes.Position =            [margin, fraction + 2*margin,       1-2*margin, 1-fraction - 1.5 * margin];
+        end
+        function NavigationDividerMouseDown(obj, ~, ~)
+            obj.IsNavDividerDragging = true;
+        end
         function createDisplayArea(obj)
             % Create & prepare the graphics containers (the figure & axes)
             
@@ -307,9 +336,11 @@ classdef VideoBrowser < handle
             % Create graphics containers
             obj.MainFigure =        figure('Units', 'normalized');
             obj.VideoPanel =        uipanel(obj.MainFigure, 'Units', 'normalized', 'Position', [0, 0, 1, 1]);
-            obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized', 'Position', [0.05, 0.2, 0.9, 0.75]);
-            obj.NavigationAxes =    axes(obj.VideoPanel, 'Units', 'normalized', 'Position', [0.05, 0.05, 0.9, 0.1]);
-            obj.CoordinateDisplay = uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'Position', [0.9, 0.155, 0.1, 0.04]);
+            obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized');
+            obj.NavigationAxes =    axes(obj.VideoPanel, 'Units', 'normalized');
+            obj.NavigationDivider = uicontrol(obj.VideoPanel, 'Style','text', 'Units', 'normalized', 'String', '----------------------------', 'Visible','on', 'BackgroundColor', obj.MainFigure.Color, 'ButtonDownFcn', @obj.NavigationDividerMouseDown, 'Enable', 'off');
+            obj.StatusBar = uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'HorizontalAlignment', 'left');
+            obj.setNavigationAxesHeightFraction(0.175);
 
             % Style graphics containers
             obj.MainFigure.ToolBar = 'none';
@@ -393,6 +424,10 @@ classdef VideoBrowser < handle
         end
         function updateNavigationXLim(obj)
             numSamples = size(obj.NavigationData, 2);
+            if numSamples == 0
+                % No nav data yet, don't bother
+                return;
+            end
 
             % Calculate xlim
             switch obj.NavigationMapMode
@@ -419,6 +454,8 @@ classdef VideoBrowser < handle
                     newTLim = [xCenter - tWidth*currentXFraction, xCenter + tWidth*(1-currentXFraction)];
                 case 'none'
                     newTLim = [xCenter - tWidth*currentXFraction, xCenter + tWidth*(1-currentXFraction)];
+                otherwise
+                    error('Unknown navigation scroll mode: %s', obj.NavigationScrollMode);
             end
             if min(newTLim) < 0
                 % Prevent start of data from displaying anywhere except
@@ -477,20 +514,21 @@ classdef VideoBrowser < handle
             numSamples = size(obj.NavigationData, 2);
             numChannels = size(obj.NavigationData, 1);
             % Determine which channels to display
-            switch obj.ChannelMode
-                case 'all'
-                    % Display all channels
-                    channelList = 1:numChannels;
-                case 'first'
-                    % Display only first channel
-                    channelList = 1;
-                case isnumeric(obj.ChannelMode)
-                    % Display channels specified by obj.ChannelMode,
-                    % interpreted as a vector of channel indices
-                    channelList = obj.ChannelMode;
-                otherwise
-                    error('Channel mode not recognized: %s', obj.ChannelMode);
+            if strcmp(obj.ChannelMode, 'all')
+                % Display all channels
+                channelList = 1:numChannels;
+            elseif strcmp(obj.ChannelMode, 'first')
+                % Display only first channel
+                channelList = 1;
+            elseif isnumeric(obj.ChannelMode)
+                % Display channels specified by obj.ChannelMode,
+                % interpreted as a vector of channel indices
+                channelList = obj.ChannelMode;
+            else
+                error('Channel mode not recognized: %s', obj.ChannelMode);
             end
+            
+            numChannelsToDisplay = length(channelList);
 
             if isempty(obj.NavigationData)
                 obj.clearNavigationData();
@@ -510,27 +548,27 @@ classdef VideoBrowser < handle
                     pixSize = get(obj.NavigationAxes,'Position');
                     set(obj.NavigationAxes,'Units',originalUnits);
 
-                    nCourse = 1;
+                    nCourse = 0.005;
                     tSize = pixSize(3) / nCourse;
                     hold(obj.NavigationAxes, 'on');
                     
-                    for channel = channelList
+                    for channelIdx = 1:length(channelList)
                         % Loop over each channel in audio, creating stacked
                         % spectrograms
+                        channel = channelList(channelIdx);
                         audio = obj.NavigationData(channel, :);
-                    
                         power = getAudioSpectrogram(audio, obj.AudioSampleRate, flim, tSize);
                         nFreqBins = size(power, 1);
                         nTimeBins = size(power, 2);
                         t = linspace(fullTLim(1), fullTLim(2), nTimeBins);
-                        freqShift = fWidth*(channel-1);
+                        freqShift = fWidth*(channelIdx-1);
                         f = linspace(flim(1)+freqShift,flim(2)+freqShift,nFreqBins);
         
                         imagesc(t,f,power, 'Parent', obj.NavigationAxes);
                     end
                 end
 
-                ylim(obj.NavigationAxes, [flim(1), flim(2) + fWidth*(numChannels-1)]);
+                ylim(obj.NavigationAxes, [flim(1), flim(2) + fWidth*(numChannelsToDisplay-1)]);
                 
                 set(obj.NavigationAxes, 'YDir', 'normal');
                 c = colormap(obj.NavigationAxes, 'parula');
@@ -570,12 +608,13 @@ classdef VideoBrowser < handle
                         t = (1:numSamples)*(numFrames/numSamples);
                     end
 
-                    for channel = channelList
-                        linec(t, obj.NavigationData(channel, :) + dataSpacing*(channel-1), 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
+                    for channelIdx = 1:length(channelList)
+                        channel = channelList(channelIdx);
+                        linec(t, obj.NavigationData(channel, :) + dataSpacing*(channelIdx-1), 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
             %             scatter(1:length(navigationData), navigationData, 1, obj.NavigationColor, '.', 'Parent', obj.NavigationAxes);
                     end
                 minY = min(obj.NavigationData(1, :));
-                ylim(obj.NavigationAxes, [minY, minY + dataRange + dataSpacing*(numChannels-1)])
+                ylim(obj.NavigationAxes, [minY, minY + dataRange + dataSpacing*(numChannelsToDisplay-1)])
                 end
             end
         end
@@ -623,11 +662,16 @@ classdef VideoBrowser < handle
 
             % Update frame number label
             scale = obj.getFrameToAxesUnitScale();
-            frameNumberString = sprintf('%0.2f', x);
+            switch obj.NavigationMapMode
+                case 'time'
+                    frameNumberString = sprintf('%0.2f', x);
+                case 'frame'
+                    frameNumberString = sprintf('%d', x);
+            end
             if isempty(obj.FrameNumberMarker) || ~isvalid(obj.FrameNumberMarker)
                 obj.FrameNumberMarker = text(obj.NavigationAxes, x + 20/scale, mean(obj.NavigationAxes.YLim), frameNumberString, 'Color', obj.FrameMarkerColor);
             else
-                obj.FrameNumberMarker.Position(1) = x + 20/scale;
+                obj.FrameNumberMarker.Position(1) = x + 20 / (scale / obj.NavigationZoom);
                 obj.FrameNumberMarker.String = frameNumberString;
             end
         end
@@ -729,8 +773,8 @@ classdef VideoBrowser < handle
             obj.CurrentFrameNum = mod(newFrameNum - 1, obj.getNumFrames()) + 1;
             obj.updateVideoFrame();
             obj.updateFrameMarker();
+            obj.updateNavigationXLim();
         end
-
         function set.FrameMarkerColor(obj, newColor)
             obj.FrameMarkerColor = newColor;
             obj.updateFrameMarker(true);
@@ -756,6 +800,40 @@ classdef VideoBrowser < handle
         function set.Colormap(obj, colormap)
             obj.Colormap = colormap;
             obj.drawNavigationData();
+        end
+        function set.ChannelMode(obj, newChannelMode)
+            % Check that channel mode is valid
+            if ischar(newChannelMode)
+                if any(strcmp(newChannelMode, {'all', 'first'}))
+                    % It's 'all' or 'first'
+                else
+                    error('Invalid channel mode: %s', newChannelMode)
+                end
+            else
+                if isnumeric(newChannelMode) && all(newChannelMode > 0) && all(newChannelMode == round(newChannelMode))
+                    % It's an array of integer channel numbers to display
+                else
+                    error('Invalid channel mode: %s', newChannelMode)
+                end
+            end
+            obj.ChannelMode = newChannelMode;
+            obj.clearNavigationData();
+            obj.drawNavigationData();
+        end
+        function [inside, x, y] = inNavigationDivider(obj, x, y)
+            % Determine if the given figure coordinates fall within the
+            %   borders of the NavigationDivider or not..
+            if y < obj.NavigationDivider.Position(2)
+                inside = false;
+            elseif y > obj.NavigationDivider.Position(2) + obj.NavigationDivider.Position(4)
+                inside = false;
+            elseif (x < obj.NavigationDivider.Position(1))
+                inside = false;
+            elseif x > obj.NavigationDivider.Position(1) + obj.NavigationDivider.Position(3)
+                inside = false;
+            else
+                inside = true;
+            end
         end
         function [inside, x, y] = inVideoAxes(obj, x, y)
             % Determine if the given figure coordinates fall within the
@@ -937,11 +1015,32 @@ classdef VideoBrowser < handle
                 end
             end
         end
+        function [inVideoAxes, inNavigationAxes, inNavigationDivider] = whereIsMouse(obj, x, y)
+            if obj.inVideoAxes(x, y)
+                inVideoAxes = true;
+                inNavigationAxes = false;
+                inNavigationDivider = false;
+            elseif obj.inNavigationAxes(x, y)
+                inVideoAxes = false;
+                inNavigationAxes = true;
+                inNavigationDivider = false;
+            elseif obj.inNavigationDivider(x, y)
+                inVideoAxes = false;
+                inNavigationAxes = false;
+                inNavigationDivider = true;
+            else
+                inVideoAxes = false;
+                inNavigationAxes = false;
+                inNavigationDivider = false;
+            end
+        end
         function MouseMotionHandler(obj, ~, ~)
             % Handle mouse motion events
-            [x, y] = obj.GetCurrentVideoPanelPoint();
+            [xFig, yFig] = obj.GetCurrentVideoPanelPoint();
 
-            if obj.inVideoAxes(x, y)
+            [inVideoAxes, inNavigationAxes, inNavigationDivider] = obj.whereIsMouse(xFig, yFig);
+
+            if inVideoAxes
                 [x, y] = obj.getCurrentVideoPoint();
                 if x > 0 && y > 0 && ~isempty(obj.VideoFrame) && x <= obj.VideoFrame.XData(2) && y <= obj.VideoFrame.YData(2)
                     switch obj.NumColorChannels
@@ -952,9 +1051,7 @@ classdef VideoBrowser < handle
                         otherwise
                             error('Invalid number of color channels');
                     end
-                    obj.CoordinateDisplay.String = sprintf('%d, %d = %s', x, y, val);
-                else
-                    obj.CoordinateDisplay.String = '';
+                    obj.StatusBar.String = sprintf('Video pixel: %d, %d = (%s)', x, y, val);
                 end
                 if obj.IsZooming
                     % Update zoom box
@@ -973,8 +1070,8 @@ classdef VideoBrowser < handle
                     obj.cancelZoom();
                 end
             end
-            if obj.inNavigationAxes(x, y)
-                frameNum = obj.mapFigureXToFrameNum(x);
+            if inNavigationAxes
+                frameNum = obj.mapFigureXToFrameNum(xFig);
                 if ~obj.isPlaying()
                     % Do not change frame during mouseover if video is
                     % playing
@@ -989,13 +1086,25 @@ classdef VideoBrowser < handle
                             obj.FrameSelection(selectBounds(1):selectBounds(2)) = false;
                     end
                 end
+                obj.StatusBar.String = sprintf('Frame = %d / %d, time = %0.3f', frameNum, obj.getNumFrames(), frameNum / obj.VideoFrameRate);
+            end
+            if inNavigationDivider
+            end
+            if ~inVideoAxes && ~inNavigationAxes && ~inNavigationDivider
+                obj.StatusBar.String = abbreviateText(obj.VideoPath, 100, 0.25);
+            end
+            if obj.IsNavDividerDragging
+                obj.setNavigationAxesHeightFraction(yFig);
             end
         end
         function MouseDownHandler(obj, src, ~)
             % Handle user mouse click
             x = src.CurrentPoint(1, 1);
             y = src.CurrentPoint(1, 2);
-            if obj.inNavigationAxes(x, y)
+
+            [~, inNavigationAxes, inNavigationDivider] = obj.whereIsMouse(x, y);
+
+            if inNavigationAxes
                 % Mouse click is in navigation axes
                 frameNum = obj.mapFigureXToFrameNum(x);
                 obj.FrameSelectStart = frameNum;
@@ -1009,11 +1118,13 @@ classdef VideoBrowser < handle
                     obj.stopVideo();
                     obj.playVideo(selectedOnly);
                 end
-                
+            end
+            if inNavigationDivider
             end
         end
         function MouseUpHandler(obj, ~, ~)
             obj.IsSelectingFrames = false;
+            obj.IsNavDividerDragging = false;
         end
         function ChangeFrameHandler(obj, evt, direction)
             % direction should be 1 or -1
