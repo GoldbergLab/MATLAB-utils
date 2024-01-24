@@ -4,33 +4,6 @@ classdef VideoBrowser < handle
     %       A separate axes contains a 1D graph representing some value for
     %       each frame. Moving the mouse over this navigational axes causes
     %       the video frame to update to the corresponding frame number.
-    %
-    %   Keyboard controls:
-    %     space =                           play/stop video
-    %     control-space =                   play video, but only selected
-    %                                       frames
-    %     right/left arrow =                increment/decrement frame number by 
-    %                                       1 frame, or if video is playing, 
-    %                                       increase/decrease playback speed
-    %     control-right/left arrow =        increment/decrement frame number by 
-    %                                       10 frames
-    %     shift-right/left arrow =          increment/decrement frame number
-    %                                       while also selecting frames
-    %     control-g =                       jump to a specific frame number
-    %     escape =                          clear current selection
-    %     a =                               zoom to fit whole frame
-    %
-    %   Mouse controls:
-    %     mouse over nav axes =             advance video frame to match mouse
-    %     right-click on image axes =       start/stop zoom in/out box. Start
-    %                                       box with upper left corner to zoom 
-    %                                       in. Start with lower right to zoom 
-    %                                       out.
-    %     double-click on image axes =      restore original zoom
-    %     left click/drag on nav axes =     select region of video
-    %     right click/drag on nav axes =    deselect region of video
-    %     scroll wheel on nav axes =        zoom in/out for nav axes
-    %
     properties (Access = private)
         VideoFrame              matlab.graphics.primitive.Image     % An image object containing the video frame image
         FrameMarker             matlab.graphics.primitive.Line      % A line on the NavigationAxes marking what frame is displayed
@@ -40,6 +13,7 @@ classdef VideoBrowser < handle
         NumColorChannels        double                              % Number of color channels in the video (1 for grayscale, 3 for color)
         NavigationRedrawEnable  logical = false                     % Enable or disable navigation redraw
         StatusBar               matlab.ui.control.UIControl
+        HelpButton              matlab.ui.control.UIControl
         IsZooming               logical = false
         ZoomStart               double = []
         ZoomBox                 matlab.graphics.primitive.Rectangle
@@ -82,11 +56,17 @@ classdef VideoBrowser < handle
     methods
         function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap, title)
             % Construct a new VideoBrowser object.
-            %   VideoData = a N x H x W double or uint8 array, where N =
-            %       the number of frames, H and W are the height and width
-            %       of each frame, or a N x H x W x 3 array, for videos
-            %       with color, or a char array representing a file path to
-            %       a video.
+            %   VideoData = 
+            %       a char array representing a file path to a video
+            %       a H x W x N double or uint8 array, where N = the number
+            %           of frames, H and W are the height and width of each
+            %           frame
+            %       a H x W x 3 x N array, for videos with color
+            %       a 1x2 cell array containing video data formatted as 
+            %           one of the above in the first cell, and audio data 
+            %           in the second cell, as a C x N 2D array, where C is
+            %           the number of audio channels, and N is the number 
+            %           of audio samples.
             %   NavigationDataOrFcn = either
             %       1. A 1 x N array, to be plotted in the NavigationAxes
             %       2. A function handle which takes N x H x W (x 3)
@@ -127,7 +107,13 @@ classdef VideoBrowser < handle
                 NavigationColormap = colormap(obj.NavigationAxes);
             end
 
-            obj.VideoData = VideoData;
+            if iscell(VideoData)
+                % User must be passing video data and audio data
+                obj.VideoData = VideoData{1};
+                obj.AudioData = VideoData{2};
+            else
+                obj.VideoData = VideoData;
+            end
 
             % Temporarily disable drawing navigation to prevent all the
             % setters from triggering a redraw multiple times
@@ -180,7 +166,35 @@ classdef VideoBrowser < handle
             obj.FrameSelection = false(1, size(obj.VideoData, ndims(obj.VideoData)));
             obj.NavigationRedrawEnable = true;
             obj.drawNavigationData();
-
+        end
+        function showHelp(obj)
+            disp('hi')
+            helpText = {'Keyboard controls:';
+            ' space =                           play/stop video';
+            ' control-space =                   play video, but only selected';
+            '                                   frames';
+            ' right/left arrow =                increment/decrement frame number by ';
+            '                                   1 frame, or if video is playing, ';
+            '                                   increase/decrease playback speed';
+            ' control-right/left arrow =        increment/decrement frame number by 1 fps';
+            '                                   10 frames, or if video is playing, increase/decrease playback speed by 10 fps';
+            ' shift-right/left arrow =          increment/decrement frame number';
+            '                                   while also selecting frames';
+            ' control-g =                       jump to a specific frame number';
+            ' escape =                          clear current selection';
+            ' a =                               reset zoom to fit whole video frame';
+            '';
+            'Mouse controls:';
+            ' mouse over nav axes =             advance video frame to match mouse';
+            ' right-click on image axes =       start/stop zoom in/out box. Start';
+            '                                   box with upper left corner to zoom ';
+            '                                   in. Start with lower right to zoom ';
+            '                                   out.';
+            ' double-click on image axes =      restore original zoom';
+            ' left click/drag on nav axes =     select region of video';
+            ' right click/drag on nav axes =    deselect region of video';
+            ' scroll wheel =                    zoom in/out for nav axes or video frame'};
+            msgbox(helpText);
         end
         function playVideo(obj, selectedOnly)
             % Start playback
@@ -198,10 +212,14 @@ classdef VideoBrowser < handle
             delete(obj.AVPlayer);
             currentAudioSample = obj.getCurrentAudioSample();
             audioData = obj.AudioData(:, currentAudioSample:end)';
-            obj.AVPlayer = audioplayer(audioData, obj.AudioSampleRate);
+            if isempty(audioData)
+                % Create blank audio data if there's none
+                audioData = zeros(1, round(obj.getNumFrames() * obj.AudioSampleRate / obj.VideoFrameRate));
+            end
+            audioPlaybackSpeed = obj.AudioSampleRate * obj.PlaybackSpeed / obj.VideoFrameRate;
+            obj.AVPlayer = audioplayer(audioData, audioPlaybackSpeed);
             obj.AVPlayer.TimerFcn = @(~, ~)obj.playFcn(selectedOnly);
             obj.AVPlayer.TimerPeriod = 1 / abs(obj.PlaybackSpeed);
-%             obj.VideoPlayJob.ExecutionMode = 'fixedRate';
             obj.AVPlayer.UserData.selectedOnly = selectedOnly;
             obj.AVPlayer.play();
             warning('on', 'MATLAB:TIMER:RATEPRECISION');
@@ -216,7 +234,7 @@ classdef VideoBrowser < handle
                 else
                     obj.incrementFrame(obj.PlayIncrement);
                 end
-                obj.StatusBar.String = sprintf('Playing: Frame = %d / %d, time = %0.3f', obj.CurrentFrameNum, obj.getNumFrames(), obj.CurrentFrameNum / obj.VideoFrameRate);
+                obj.StatusBar.String = sprintf('Playing: Frame = %d / %d, time = %0.3f s', obj.CurrentFrameNum, obj.getNumFrames(), obj.CurrentFrameNum / obj.VideoFrameRate);
                 drawnow;
             catch me
                 switch me.identifier
@@ -314,12 +332,24 @@ classdef VideoBrowser < handle
             dividerHeight = 10 / obj.MainFigure.Position(4);
             obj.MainFigure.Units = originalUnits;
 
-            obj.StatusBar.Position =            [0, 0, 1, 0.1];
+            % Set up status bar and help button so they are both 1
+            % character high, and the help button fits to the right of the
+            % status bar and is 1 character wide
+            obj.HelpButton.Position = [1, 0, 0.1, 0.1];
+            obj.StatusBar.Position =  [0, 0, 0.9, 0.1];
             obj.StatusBar.Units = 'characters';
+            obj.HelpButton.Units = 'characters';
             obj.StatusBar.Position(4) = 1;
+            obj.HelpButton.Position(4) = 1;
+            obj.HelpButton.Position(1) = obj.HelpButton.Position(1) - 2;
+            obj.HelpButton.Position(3) = 2;
+            obj.StatusBar.Position(3) = obj.StatusBar.Position(3) - 1;
             obj.StatusBar.Units = 'normalized';
+            obj.HelpButton.Units = 'normalized';
             statusBarHeight = obj.StatusBar.Position(4);
 
+            % Set up navigation axes, divider, and video axes so they share
+            % the vertical space based on the value of `fraction`
             obj.NavigationAxes.Position =       [margin, statusBarHeight + margin,  1-2*margin, fraction - 1.5 * margin - statusBarHeight];
             obj.NavigationDivider.Position =    [margin, fraction-dividerHeight/2,  1-2*margin, dividerHeight];
             obj.VideoAxes.Position =            [margin, fraction + 2*margin,       1-2*margin, 1-fraction - 1.5 * margin];
@@ -339,7 +369,8 @@ classdef VideoBrowser < handle
             obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized');
             obj.NavigationAxes =    axes(obj.VideoPanel, 'Units', 'normalized');
             obj.NavigationDivider = uicontrol(obj.VideoPanel, 'Style','text', 'Units', 'normalized', 'String', '----------------------------', 'Visible','on', 'BackgroundColor', obj.MainFigure.Color, 'ButtonDownFcn', @obj.NavigationDividerMouseDown, 'Enable', 'off');
-            obj.StatusBar = uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'HorizontalAlignment', 'left');
+            obj.StatusBar =  uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'HorizontalAlignment', 'left');
+            obj.HelpButton = uicontrol(obj.VideoPanel, 'Style', 'pushbutton', 'Units', 'normalized', 'String', '?', 'HorizontalAlignment', 'center', 'ButtonDownFcn', @obj.showHelp);
             obj.setNavigationAxesHeightFraction(0.175);
 
             % Style graphics containers
@@ -479,10 +510,10 @@ classdef VideoBrowser < handle
                     otherwise
                         error('Unknown named navigation function: %s', obj.NavigationDataFunction);
                 end
-            else
-                if ~isempty(obj.VideoData)
-                    obj.NavigationData = obj.NavigationDataFunction(obj.VideoData);
-                end
+            elseif ~isempty(obj.NavigationDataFunction) && ~isempty(obj.VideoData)
+                % Navigation data function must be an actual function handle -
+                % apply it
+                obj.NavigationData = obj.NavigationDataFunction(obj.VideoData);
             end
 
             if isempty(obj.NavigationData)
@@ -613,8 +644,14 @@ classdef VideoBrowser < handle
                         linec(t, obj.NavigationData(channel, :) + dataSpacing*(channelIdx-1), 'Color', obj.NavigationColor, 'Parent', obj.NavigationAxes);
             %             scatter(1:length(navigationData), navigationData, 1, obj.NavigationColor, '.', 'Parent', obj.NavigationAxes);
                     end
-                minY = min(obj.NavigationData(1, :));
-                ylim(obj.NavigationAxes, [minY, minY + dataRange + dataSpacing*(numChannelsToDisplay-1)])
+                    minY = min(obj.NavigationData(1, :));
+                    navigationYLim = [minY, minY + dataRange + dataSpacing*(numChannelsToDisplay-1)];
+                    if diff(navigationYLim) <= 0
+                        % Nav data has no vertical range - use a default
+                        % instead
+                        navigationYLim = [-1, 1];
+                    end
+                    ylim(obj.NavigationAxes, navigationYLim);
                 end
             end
         end
@@ -982,9 +1019,23 @@ classdef VideoBrowser < handle
             x = (obj.MainFigure.CurrentPoint(1, 1) - panelX0) / panelW;
             y = (obj.MainFigure.CurrentPoint(1, 2) - panelY0) / panelH;
         end
+        function ZoomIntoPoint(obj, x, y, zoomFactor)
+            dx = diff(obj.VideoAxes.XLim) * zoomFactor;
+            dy = diff(obj.VideoAxes.YLim) * zoomFactor;
+            obj.ZoomVideoAxes(x - dx/2, y - dy/2, x + dx/2, y + dy/2);
+        end
         function ScrollHandler(obj, ~, evt)
-            [x, y] = obj.GetCurrentVideoPanelPoint();
-            if obj.inNavigationAxes(x, y)
+            [xFig, yFig] = obj.GetCurrentVideoPanelPoint();
+            
+            [inVideoAxes, inNavigationAxes, ~] = obj.whereIsMouse(xFig, yFig);
+
+            if inVideoAxes
+                scrollCount = evt.VerticalScrollCount;
+                zoomFactor = 2^(scrollCount/3);
+                [x, y] = obj.getCurrentVideoPoint();
+                obj.ZoomIntoPoint(x, y, zoomFactor);
+            end
+            if inNavigationAxes
                 scrollCount = evt.VerticalScrollCount;
                 if obj.ShiftKeyDown
                     % User has shift pressed - shift axes instead of
@@ -996,7 +1047,7 @@ classdef VideoBrowser < handle
                     xlim(obj.NavigationAxes, newTLim);
                     
                     % Update video frame too
-                    frameNum = obj.mapFigureXToFrameNum(x);
+                    frameNum = obj.mapFigureXToFrameNum(xFig);
                     if ~obj.isPlaying()
                         % Do not change frame during mouseover if video is
                         % playing
@@ -1086,12 +1137,16 @@ classdef VideoBrowser < handle
                             obj.FrameSelection(selectBounds(1):selectBounds(2)) = false;
                     end
                 end
-                obj.StatusBar.String = sprintf('Frame = %d / %d, time = %0.3f', frameNum, obj.getNumFrames(), frameNum / obj.VideoFrameRate);
+                obj.StatusBar.String = sprintf('Frame = %d / %d, time = %0.3f s', frameNum, obj.getNumFrames(), frameNum / obj.VideoFrameRate);
             end
             if inNavigationDivider
             end
             if ~inVideoAxes && ~inNavigationAxes && ~inNavigationDivider
-                obj.StatusBar.String = abbreviateText(obj.VideoPath, 100, 0.25);
+                if isempty(obj.VideoPath)
+                    obj.StatusBar.String = 'Video from array';
+                else
+                    obj.StatusBar.String = abbreviateText(obj.VideoPath, 100, 0.25);
+                end
             end
             if obj.IsNavDividerDragging
                 obj.setNavigationAxesHeightFraction(yFig);
@@ -1126,34 +1181,41 @@ classdef VideoBrowser < handle
             obj.IsSelectingFrames = false;
             obj.IsNavDividerDragging = false;
         end
+        function ChangeSpeedHandler(obj, evt, direction)
+            % Video is playing - instead of changing frame, change
+            % playback speed
+            if any(strcmp(evt.Modifier, 'control'))
+                % User is holding down control - change by 10 fps
+                delta = 10 * direction;
+            else
+                % Change speed by 1 fps
+                delta = 1 * direction;
+            end
+            warning('off', 'MATLAB:TIMER:RATEPRECISION');
+            obj.PlaybackSpeed = obj.PlaybackSpeed + delta;
+            warning('on', 'MATLAB:TIMER:RATEPRECISION');
+        end
         function ChangeFrameHandler(obj, evt, direction)
             % direction should be 1 or -1
             select = false;
-            if obj.isPlaying()
-                % Video is playing - 
-                warning('off', 'MATLAB:TIMER:RATEPRECISION');
-                obj.PlaybackSpeed = obj.PlaybackSpeed + 10 * direction;
-                warning('on', 'MATLAB:TIMER:RATEPRECISION');
-            else
-                delta = 1 * direction;
-                if any(strcmp(evt.Modifier, 'control'))
-                    % User is holding down control - jump by 10
-                    delta = 10 * direction;
-                end
+            delta = 1 * direction;
+            if any(strcmp(evt.Modifier, 'control'))
+                % User is holding down control - jump by 10
+                delta = 10 * direction;
+            end
 
-                if any(strcmp(evt.Modifier, 'shift'))
-                    % User is holding down shift - select while 
-                    %   changing frames
-                    select = true;
-                    selectStart = obj.CurrentFrameNum;
-                end
-                obj.incrementFrame(delta);
+            if any(strcmp(evt.Modifier, 'shift'))
+                % User is holding down shift - select while 
+                %   changing frames
+                select = true;
+                selectStart = obj.CurrentFrameNum;
+            end
+            obj.incrementFrame(delta);
 
-                if select
-                    % User is selecting while changing frames
-                    selectEnd = obj.CurrentFrameNum;
-                    obj.FrameSelection(selectStart:direction:selectEnd) = true;
-                end
+            if select
+                % User is selecting while changing frames
+                selectEnd = obj.CurrentFrameNum;
+                obj.FrameSelection(selectStart:direction:selectEnd) = true;
             end
         end
         function KeyReleaseHandler(obj, ~, evt)
@@ -1207,9 +1269,17 @@ classdef VideoBrowser < handle
                         end
                     end
                 case 'rightarrow'
-                    obj.ChangeFrameHandler(evt, 1)
+                    if obj.isPlaying()
+                        obj.ChangeSpeedHandler(evt, 1);
+                    else
+                        obj.ChangeFrameHandler(evt, 1);
+                    end
                 case 'leftarrow'
-                    obj.ChangeFrameHandler(evt, -1)
+                    if obj.isPlaying()
+                        obj.ChangeSpeedHandler(evt, -1);
+                    else
+                        obj.ChangeFrameHandler(evt, -1);
+                    end
                 case 'g'
                     if any(strcmp(evt.Modifier, 'control'))
                         % control-g pressed
