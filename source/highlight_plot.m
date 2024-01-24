@@ -80,7 +80,7 @@ end
 
 % Translate indices into actual x values
 ons = mask_x(ons);
-offs = mask_x(offs);
+offs = mask_x(offs + 1);
 
 % Get y-limits of axes, so we know how tall to make the rectangles
 ylimits = ylim(ax);
@@ -92,7 +92,7 @@ rectangles = rectangle().empty();
 for k = 1:length(ons)
     on = ons(k);
     off = offs(k);
-    dx = off - on + 1;
+    dx = off - on;
     rectangles(k) = rectangle(ax, 'Position', [on, y_min - dy, dx, dy * 3], 'FaceColor', color, 'EdgeColor', 'none');
 end
 
