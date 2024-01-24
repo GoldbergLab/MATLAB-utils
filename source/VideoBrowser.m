@@ -167,34 +167,42 @@ classdef VideoBrowser < handle
             obj.NavigationRedrawEnable = true;
             obj.drawNavigationData();
         end
-        function showHelp(obj)
-            disp('hi')
-            helpText = {'Keyboard controls:';
-            ' space =                           play/stop video';
-            ' control-space =                   play video, but only selected';
-            '                                   frames';
-            ' right/left arrow =                increment/decrement frame number by ';
-            '                                   1 frame, or if video is playing, ';
-            '                                   increase/decrease playback speed';
-            ' control-right/left arrow =        increment/decrement frame number by 1 fps';
-            '                                   10 frames, or if video is playing, increase/decrease playback speed by 10 fps';
-            ' shift-right/left arrow =          increment/decrement frame number';
-            '                                   while also selecting frames';
-            ' control-g =                       jump to a specific frame number';
-            ' escape =                          clear current selection';
-            ' a =                               reset zoom to fit whole video frame';
-            '';
-            'Mouse controls:';
-            ' mouse over nav axes =             advance video frame to match mouse';
-            ' right-click on image axes =       start/stop zoom in/out box. Start';
-            '                                   box with upper left corner to zoom ';
-            '                                   in. Start with lower right to zoom ';
-            '                                   out.';
-            ' double-click on image axes =      restore original zoom';
-            ' left click/drag on nav axes =     select region of video';
-            ' right click/drag on nav axes =    deselect region of video';
-            ' scroll wheel =                    zoom in/out for nav axes or video frame'};
-            msgbox(helpText);
+        function showHelp(obj, ~, ~, ~) %#ok<INUSD> 
+            helpText = {
+'***************************** Video Browser ******************************';
+'                                controls';
+'';
+'Keyboard controls:';
+'   space =                           play/stop video';
+'   control-space =                   play video, but only selected';
+'                                     frames';
+'   right/left arrow =                increment/decrement frame number by ';
+'                                     1 frame, or if video is playing, ';
+'                                     increase/decrease playback speed';
+'   control-right/left arrow =        increment/decrement frame number by';
+'                                     1 fps/10 frames, or if video is';
+'                                     playing, increase/decrease playback';
+'                                     speed by 10 fps';
+'   shift-right/left arrow =          increment/decrement frame number';
+'                                     while also selecting frames';
+'   control-g =                       jump to a specific frame number';
+'   escape =                          clear current selection';
+'   a =                               reset zoom to fit whole video frame';
+'';
+'Mouse controls:';
+'   mouse over nav axes =             advance video frame to match mouse';
+'   right-click on image axes =       start/stop zoom in/out box. Start';
+'                                     box with upper left corner to zoom ';
+'                                     in. Start with lower right to zoom ';
+'                                     out.';
+'   double-click on image axes =      restore original zoom';
+'   left click/drag on nav axes =     select region of video';
+'   right click/drag on nav axes =    deselect region of video';
+'   scroll wheel =                    zoom in/out for nav axes or video';
+'                                     frame'
+};
+            f = figure();
+            f.UserData.text = uicontrol(f, 'Style', 'text', 'Units', 'normalized', 'Position', [0.01, 0.01, 0.99, 0.99], 'FontName', 'Monospaced', 'String', helpText, 'HorizontalAlignment','left');
         end
         function playVideo(obj, selectedOnly)
             % Start playback
@@ -210,6 +218,9 @@ classdef VideoBrowser < handle
                 obj.PlayIncrement = 1;
             end
             delete(obj.AVPlayer);
+            if selectedOnly
+                obj.CurrentFrameNum = obj.findNextSelectedFrameNum(obj.CurrentFrameNum, obj.PlayIncrement);
+            end
             currentAudioSample = obj.getCurrentAudioSample();
             audioData = obj.AudioData(:, currentAudioSample:end)';
             if isempty(audioData)
@@ -250,9 +261,13 @@ classdef VideoBrowser < handle
         end
         function stopVideo(obj)
             % Stop video playback
-
             stop(obj.AVPlayer);
             delete(obj.AVPlayer);
+        end
+        function restartVideo(obj)
+            selectedOnly = obj.IsPlayingSelectedOnly();
+            obj.stopVideo();
+            obj.playVideo(selectedOnly);
         end
         function playing = isPlaying(obj)
             % Check if video is currently playing
@@ -267,12 +282,18 @@ classdef VideoBrowser < handle
         function incrementSelectedFrame(obj, delta)
             % Increment the current frame by delta, while ensuring the next
             % frame will be Selected
-
             nextFrameNum = obj.CurrentFrameNum + delta;
             if ~obj.FrameSelection(nextFrameNum)
                 nextFrameNum = obj.findNextSelectedFrameNum(nextFrameNum, delta);
             end
+            skipAmount = nextFrameNum - obj.CurrentFrameNum;
             obj.CurrentFrameNum = nextFrameNum;
+            if obj.isPlaying() && skipAmount ~= 1
+                % If we're skipping to some other frame other than the
+                % next one, we need to restart the player so the audio
+                % will skip with the video
+                obj.restartVideo()
+            end
         end
         function audioSample = getCurrentAudioSample(obj)
             audioSample = obj.convertFrameNumberToAudioSample(obj.CurrentFrameNum);
@@ -341,8 +362,9 @@ classdef VideoBrowser < handle
             obj.HelpButton.Units = 'characters';
             obj.StatusBar.Position(4) = 1;
             obj.HelpButton.Position(4) = 1;
-            obj.HelpButton.Position(1) = obj.HelpButton.Position(1) - 2;
-            obj.HelpButton.Position(3) = 2;
+            helpButtonCharWidth = 2;
+            obj.HelpButton.Position(1) = obj.HelpButton.Position(1) - helpButtonCharWidth;
+            obj.HelpButton.Position(3) = helpButtonCharWidth;
             obj.StatusBar.Position(3) = obj.StatusBar.Position(3) - 1;
             obj.StatusBar.Units = 'normalized';
             obj.HelpButton.Units = 'normalized';
@@ -370,7 +392,7 @@ classdef VideoBrowser < handle
             obj.NavigationAxes =    axes(obj.VideoPanel, 'Units', 'normalized');
             obj.NavigationDivider = uicontrol(obj.VideoPanel, 'Style','text', 'Units', 'normalized', 'String', '----------------------------', 'Visible','on', 'BackgroundColor', obj.MainFigure.Color, 'ButtonDownFcn', @obj.NavigationDividerMouseDown, 'Enable', 'off');
             obj.StatusBar =  uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'HorizontalAlignment', 'left');
-            obj.HelpButton = uicontrol(obj.VideoPanel, 'Style', 'pushbutton', 'Units', 'normalized', 'String', '?', 'HorizontalAlignment', 'center', 'ButtonDownFcn', @obj.showHelp);
+            obj.HelpButton = uicontrol(obj.VideoPanel, 'Style', 'pushbutton', 'Units', 'normalized', 'String', '?', 'HorizontalAlignment', 'center', 'Callback', @obj.showHelp);
             obj.setNavigationAxesHeightFraction(0.175);
 
             % Style graphics containers
@@ -712,7 +734,7 @@ classdef VideoBrowser < handle
                 obj.FrameNumberMarker.String = frameNumberString;
             end
         end
-        function updateSelection(obj)
+        function updateFrameSelection(obj)
             % Update the selection display to match the current selection
 
             for k = 1:length(obj.FrameSelectionHandles)
@@ -725,7 +747,7 @@ classdef VideoBrowser < handle
                 case 'time'
                     scale = obj.AudioSampleRate;
             end
-            highlight_x = linspace(1, size(obj.NavigationData, 2) / scale, obj.getNumFrames());
+            highlight_x = linspace(0, size(obj.NavigationData, 2) / scale, obj.getNumFrames());
             obj.FrameSelectionHandles = highlight_plot(obj.NavigationAxes, highlight_x, obj.FrameSelection, obj.FrameSelectionColor);
         end
         function set.VideoFrameRate(obj, frameRate)
@@ -735,7 +757,7 @@ classdef VideoBrowser < handle
             % Setter for Selection property
 
             obj.FrameSelection = newSelection;
-            obj.updateSelection();
+            obj.updateFrameSelection();
         end
         function updateNumColorChannels(obj)
             if ndims(obj.VideoData) == 4
@@ -829,9 +851,7 @@ classdef VideoBrowser < handle
             obj.PlaybackSpeed = fps;
             % If timer is already running, restart it
             if obj.isPlaying()
-                selectedOnly = obj.IsPlayingSelectedOnly();
-                obj.stopVideo();
-                obj.playVideo(selectedOnly);
+                obj.restartVideo();
             end
         end
         function set.Colormap(obj, colormap)
@@ -1152,26 +1172,22 @@ classdef VideoBrowser < handle
                 obj.setNavigationAxesHeightFraction(yFig);
             end
         end
-        function MouseDownHandler(obj, src, ~)
+        function MouseDownHandler(obj, ~, ~)
             % Handle user mouse click
-            x = src.CurrentPoint(1, 1);
-            y = src.CurrentPoint(1, 2);
+            [xFig, yFig] = obj.GetCurrentVideoPanelPoint();
 
-            [~, inNavigationAxes, inNavigationDivider] = obj.whereIsMouse(x, y);
+            [~, inNavigationAxes, inNavigationDivider] = obj.whereIsMouse(xFig, yFig);
 
             if inNavigationAxes
                 % Mouse click is in navigation axes
-                frameNum = obj.mapFigureXToFrameNum(x);
+                frameNum = obj.mapFigureXToFrameNum(xFig);
                 obj.FrameSelectStart = frameNum;
                 obj.IsSelectingFrames = true;
 
                 % Set current frame to the click location
                 obj.CurrentFrameNum = frameNum;
                 if obj.isPlaying()
-                    % If video is currently playing, restart player
-                    selectedOnly = obj.IsPlayingSelectedOnly();
-                    obj.stopVideo();
-                    obj.playVideo(selectedOnly);
+                    obj.restartVideo();
                 end
             end
             if inNavigationDivider
