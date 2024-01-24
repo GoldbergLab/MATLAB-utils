@@ -18,7 +18,7 @@ classdef VideoSetBrowser < VideoBrowser
         function obj = VideoSetBrowser(videoDirectory, videoFilter, varargin)
             obj@VideoBrowser('', varargin{:});
             if ~exist('videoFilter', 'var') || isempty(videoFilter)
-                videoFilter = '.*\.[aAvViI]';
+                videoFilter = '(.*)\.(?:(?:avi)|(?:AVI)|(?:mp4)|(?:MP4))';
             end
             obj.VideoCache = MemoryCache(5);
             obj.VideoDirectory = videoDirectory;

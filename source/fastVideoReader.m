@@ -86,7 +86,7 @@ end
 try
     % Open and read in raw file
     f = fopen(tempFilePath);
-    videoData = uint8(fread(f, '*uint8'));
+    videoData = uint8(fread(f, prod(videoSize), '*uint8'));
     % Reshape flat array into 4-D video array
     videoData = permute(reshape(videoData, videoSize), permuteOrder);
     % Close file
