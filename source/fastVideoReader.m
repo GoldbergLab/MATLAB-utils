@@ -70,7 +70,48 @@ catch
     no_tcp = false;
 end
 
-if exist('tcpserver', 'file') && ~no_tcp
+try
+    % Check if user set NO_MMAP variable
+    no_mmap = evalin('base', 'NO_MMAP');
+catch
+    % User did not set NO_MMAP environment variable
+    no_mmap = false;
+end
+
+if ~no_mmap
+    % Generate random temp filename to temporarily store raw video data
+    try
+        tempFilePath = tempname(); %sprintf('tmp%s.raw', r);
+    catch
+        % System-provided temp file couldn't be obtained. Use a local temporary
+        % file instead.
+        r = strjoin(arrayfun(@dec2hex, randi(16, [1, 10]), 'UniformOutput', false), '');
+        tempFilePath = sprintf('tmp%s.raw', r);
+    end
+    % Establish a temporary file
+    fileID = fopen(tempFilePath, 'w');
+    fwrite(fileID, 1);
+    fclose(fileID);
+    try
+        mmap = memmapfile(tempFilePath);
+        cmd = sprintf('ffmpeg -i "%s" -an -vsync 0 -f rawvideo -pix_fmt %s -v error -y %s', videoPath, fmt, tempFilePath);
+        [status,cmdout] = system(cmd);
+        if status ~= 0
+            error(cmdout);
+            return;
+        end
+        videoData = permute(reshape(typecast(mmap.Data, 'uint8'), ffmpegVideoShape), permuteOrder);
+        clear mmap;
+        if exist(tempFilePath, 'var')
+            delete(tempFilePath);
+        end
+    catch ME
+        if exist(tempFilePath, 'var')
+            delete(tempFilePath);
+        end
+        rethrow(ME);
+    end
+elseif ~no_tcp
     % Attempt to stream directly frmo ffmpeg to MATLAB through TCP socket
     % This requires the Instrument Control Toolbox.
 
