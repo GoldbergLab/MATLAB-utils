@@ -14,10 +14,10 @@ end
 if status ~= 0
     error(cmdout);
 end
-videoSize = arrayfun(@str2double, strsplit(strtrim(cmdout), ','));
-videoWidth = videoSize(1);
-videoHeight = videoSize(2);
-numFrames = videoSize(3);
+ffmpegVideoShape = arrayfun(@str2double, strsplit(strtrim(cmdout), ','));
+videoWidth = ffmpegVideoShape(1);
+videoHeight = ffmpegVideoShape(2);
+numFrames = ffmpegVideoShape(3);
 
 if ~exist('numChannels', 'var') || isempty(numChannels)
     % Attempt to use ffprobe to determine channel count
@@ -48,15 +48,15 @@ end
 switch numChannels
     case 1
         fmt = 'gray';
-        videoSize = [videoWidth, videoHeight, numFrames];
+        ffmpegVideoShape = [videoWidth, videoHeight, numFrames];
         permuteOrder = [2, 1, 3];
     case 3
         fmt = 'rgb24';
-        videoSize = [3, videoWidth, videoHeight, numFrames];
+        ffmpegVideoShape = [3, videoWidth, videoHeight, numFrames];
         permuteOrder = [3, 2, 1, 4];
     case 4
         fmt = 'rgba';
-        videoSize = [4, videoWidth, videoHeight, numFrames];
+        ffmpegVideoShape = [4, videoWidth, videoHeight, numFrames];
         permuteOrder = [3, 2, 1, 4];
     otherwise
         error('Supported # of channels are 1 (grayscale), 3 (color), or 4 (color + transparency), not %s', numChannels);
@@ -74,7 +74,7 @@ if exist('tcpserver', 'file') && ~no_tcp
     % Attempt to stream directly frmo ffmpeg to MATLAB through TCP socket
     % This requires the Instrument Control Toolbox.
 
-    disp('Reading video over TCP')
+    disp('Reading video over TCP (set ''NO_TCP=true'' to disable)')
     
     try
         % Open tcp server to receive data
@@ -101,22 +101,29 @@ if exist('tcpserver', 'file') && ~no_tcp
             error('Could not find an open TCP port to stream video data.')
         end
 
-        videoBytes = prod(videoSize);
+        ffmpegFrameShape = ffmpegVideoShape(1:end-1);
+        framePermuteOrder = permuteOrder(1:end-1);
+
+        videoBytes = prod(ffmpegVideoShape);
         notifyBytes = 10000000;
         server.UserData.BytesRead = 0;
         server.UserData.StartTime = datetime();
         byteUpdate = getByteUpdate(notifyBytes, videoBytes);
 %        server.configureCallback("byte", notifyBytes, byteUpdate);
         
-        % Use ffmpeg to convert file to raw bytes
-        cmd = sprintf('START /B ffmpeg -i "%s" -an -vsync 0 -f rawvideo -pix_fmt %s -send_buffer_size 33554432 -loglevel quiet -y tcp://%s:%d', videoPath, fmt, tcpAddress, tcpPort);
+        bufferBytes = prod(ffmpegFrameShape) * 10;  % Set buffer equal to 10 frames worth of data
+
+        % Use ffmpeg to decode file to raw bytes and send them over via
+        % loopback 
+        cmd = sprintf('START /B ffmpeg -i "%s" -an -vsync 0 -f rawvideo -pix_fmt %s -send_buffer_size %d -loglevel quiet -y tcp://%s:%d', videoPath, fmt, bufferBytes, tcpAddress, tcpPort);
         [status,cmdout] = system(cmd);
         if status ~= 0
             error(cmdout);
             return;
         end
 
-        videoData = tcpChunkReader(server, 16777216, videoBytes);
+        % Read 
+        videoData = tcpChunkReader(server, numFrames, ffmpegFrameShape, framePermuteOrder);
 
         server.delete()
         clear server;
@@ -150,7 +157,7 @@ else
     try
         % Open and read in raw file
         f = fopen(tempFilePath);
-        videoData = uint8(fread(f, prod(videoSize), '*uint8'));
+        videoData = uint8(fread(f, prod(ffmpegVideoShape), '*uint8'));
         % Close file
         fclose(f);
         % Delete temporary raw video file
@@ -161,10 +168,10 @@ else
         delete(tempFilePath);
         disp(getReport(ME));
     end
-end
 
-% Reshape flat array into 4-D video array
-videoData = permute(reshape(videoData, videoSize), permuteOrder);
+    % Reshape flat array into 4-D video array
+    videoData = permute(reshape(videoData, ffmpegVideoShape), permuteOrder);
+end
 
 end
 
@@ -178,11 +185,11 @@ end
 
 function connectionFcn(server, ~)
     if server.Connected
-        disp('Connected to ffmpeg');
+%        disp('Connected to ffmpeg');
     end
 end
 
-function videoData = tcpChunkReader(server, chunkSize, totalSize)
+function frameData = readFrame(server, rawFrameShape, framePermuteOrder)
     % This involves a ridiculous hack necessitated by the fact that 
     % tcpserverrefuses to return the read data in any form other than an 8 
     % byte double, which means for large videos you're gonna run out of RAM
@@ -191,33 +198,58 @@ function videoData = tcpChunkReader(server, chunkSize, totalSize)
     % bytes in as doubles, but sometimes the # of bytes will not be a
     % multiple of 8, so there will be some left over, which we have to
     % gather up, before typecasting the whole mess back into uint8 and
-    % piecing it back into a single array.
+    % piecing it back into a single array.    
     
     doubleBytes = 8;
+    frameBytes = prod(rawFrameShape);
+    chunkBytes = round(frameBytes / doubleBytes) * doubleBytes;
+    remainderBytes = frameBytes - chunkBytes;
 
-    % Make chunk size a multiple of 8 so we can read an even # of doubles
-    chunkSize = round(chunkSize / doubleBytes) * doubleBytes;
-    numChunks = floor(totalSize / chunkSize);
-    % Get size of remainder chunk of doubles
-    remainderChunkSize = totalSize - floor(totalSize/chunkSize)*chunkSize;
-    remainderChunkSize = round(remainderChunkSize / doubleBytes) * doubleBytes;
-    % Get # of left over bytes after all doubles have been read
-    remainderBytes = totalSize - chunkSize * numChunks - remainderChunkSize;
-
-    videoData = zeros(totalSize, 1, 'uint8');
-
-    disp('Beginning read');
-    for k = 1:numChunks
-        displayProgress('%d of %d chunks read\n', k, numChunks, 10);
-        videoData(chunkSize*(k-1)+1:chunkSize*k) = typecast(server.read(chunkSize / doubleBytes, 'double'), 'uint8');
-    end
-    if remainderChunkSize > 0
-%        disp('Reading remainder double chunk');
-        videoData(chunkSize*numChunks + 1:chunkSize*numChunks + remainderChunkSize) = typecast(server.read(remainderChunkSize / doubleBytes, 'double'), 'uint8');
-    end
+    frameData = zeros(rawFrameShape, 'uint8');
+    frameData(1:chunkBytes) = typecast(server.read(chunkBytes / doubleBytes, 'double'), 'uint8');
     if remainderBytes > 0
-%        disp('Reading remainder uint8 chunk');
-        videoData(chunkSize*numChunks + remainderChunkSize + 1:end) = typecast(server.read(remainderBytes, 'uint8'), 'uint8');
+        frameData(chunkBytes+1:end) = typecast(server.read(ceil(remainderBytes / doubleBytes), 'double'), 'uint8');
     end
-    disp('Done reading');
+    frameData = permute(frameData, framePermuteOrder);
+end
+
+function videoData = tcpChunkReader(server, numFrames, rawFrameShape, framePermuteOrder)
+    numFrameBytes = prod(rawFrameShape);
+
+    videoData = zeros([rawFrameShape(framePermuteOrder), numFrames], 'uint8');
+    for k = 1:numFrames
+        displayProgress('%d of %d frames read\n', k, numFrames, 10);
+        videoData(numFrameBytes*(k-1)+1:numFrameBytes*k) = readFrame(server, rawFrameShape, framePermuteOrder);
+    end
+
+% 
+%     doubleBytes = 8;
+% 
+%     frameBytes = prod(rawFrameShape);
+% 
+%     % Make chunk size a multiple of 8 so we can read an even # of doubles
+%     frameBytes = round(frameBytes / doubleBytes) * doubleBytes;
+%     numChunks = floor(totalSize / frameBytes);
+%     % Get size of remainder chunk of doubles
+%     remainderChunkSize = totalSize - floor(totalSize/frameBytes)*frameBytes;
+%     remainderChunkSize = round(remainderChunkSize / doubleBytes) * doubleBytes;
+%     % Get # of left over bytes after all doubles have been read
+%     remainderBytes = totalSize - frameBytes * numChunks - remainderChunkSize;
+% 
+%     videoData = zeros(totalSize, 1, 'uint8');
+% 
+%     disp('Beginning read');
+%     for k = 1:numChunks
+%         displayProgress('%d of %d chunks read\n', k, numChunks, 10);
+%         videoData(frameBytes*(k-1)+1:frameBytes*k) = typecast(server.read(frameBytes / doubleBytes, 'double'), 'uint8');
+%     end
+%     if remainderChunkSize > 0
+% %        disp('Reading remainder double chunk');
+%         videoData(frameBytes*numChunks + 1:frameBytes*numChunks + remainderChunkSize) = typecast(server.read(remainderChunkSize / doubleBytes, 'double'), 'uint8');
+%     end
+%     if remainderBytes > 0
+% %        disp('Reading remainder uint8 chunk');
+%         videoData(frameBytes*numChunks + remainderChunkSize + 1:end) = typecast(server.read(remainderBytes, 'uint8'), 'uint8');
+%     end
+%     disp('Done reading');
 end
