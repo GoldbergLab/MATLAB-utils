@@ -100,8 +100,9 @@ if ~no_mmap
             error(cmdout);
             return;
         end
-        videoData = permute(reshape(typecast(mmap.Data, 'uint8'), ffmpegVideoShape), permuteOrder);
+        videoData = reshape(typecast(mmap.Data, 'uint8'), ffmpegVideoShape);
         clear mmap;
+        videoData = permute(videoData, permuteOrder);
         if exist(tempFilePath, 'var')
             delete(tempFilePath);
         end
