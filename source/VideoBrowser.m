@@ -54,7 +54,7 @@ classdef VideoBrowser < handle
         AudioData = []                          % Audio data, a NxC array, where N is # of samples, C is # of channels
     end
     methods
-        function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap, title)
+        function obj = VideoBrowser(VideoData, NavigationDataOrFcn, NavigationColor, NavigationColormap, NavigationCLim, title)
             % Construct a new VideoBrowser object.
             %   VideoData = 
             %       a char array representing a file path to a video
@@ -93,6 +93,11 @@ classdef VideoBrowser < handle
             obj.Title = title;
 
             obj.createDisplayArea();
+
+            if ~exist('NavigationCLim', 'var') || isempty(NavigationCLim)
+                NavigationCLim = [13.0000, 24.5000];
+            end
+            obj.NavigationAxes.CLim = NavigationCLim;
 
             if ~exist('VideoData', 'var') || isempty(VideoData)
                 VideoData = [];
@@ -389,7 +394,7 @@ classdef VideoBrowser < handle
             obj.MainFigure =        figure('Units', 'normalized');
             obj.VideoPanel =        uipanel(obj.MainFigure, 'Units', 'normalized', 'Position', [0, 0, 1, 1]);
             obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized');
-            obj.NavigationAxes =    axes(obj.VideoPanel, 'Units', 'normalized');
+            obj.NavigationAxes =    axes(obj.VideoPanel, 'Units', 'normalized', 'HitTest', 'on', 'PickableParts', 'all');
             obj.NavigationDivider = uicontrol(obj.VideoPanel, 'Style','text', 'Units', 'normalized', 'String', '----------------------------', 'Visible','on', 'BackgroundColor', obj.MainFigure.Color, 'ButtonDownFcn', @obj.NavigationDividerMouseDown, 'Enable', 'off');
             obj.StatusBar =  uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'HorizontalAlignment', 'left');
             obj.HelpButton = uicontrol(obj.VideoPanel, 'Style', 'pushbutton', 'Units', 'normalized', 'String', '?', 'HorizontalAlignment', 'center', 'Callback', @obj.showHelp);
@@ -589,7 +594,6 @@ classdef VideoBrowser < handle
                 % User requested spectrogram of audio data
                 fullTLim = [0, numSamples / obj.AudioSampleRate];
                 flim = [50, 7500];
-                clim = [13.0000, 24.5000];
                 stackSeparation = 100;
                 fWidth = diff(flim) + stackSeparation;
                 if replot
@@ -617,7 +621,7 @@ classdef VideoBrowser < handle
                         freqShift = fWidth*(channelIdx-1);
                         f = linspace(flim(1)+freqShift,flim(2)+freqShift,nFreqBins);
         
-                        imagesc(t,f,power, 'Parent', obj.NavigationAxes);
+                        imagesc(t,f,power, 'Parent', obj.NavigationAxes, 'HitTest', 'off', 'PickableParts', 'none');
                     end
                 end
 
@@ -627,7 +631,6 @@ classdef VideoBrowser < handle
                 c = colormap(obj.NavigationAxes, 'parula');
                 c(1, :) = [0, 0, 0];
                 colormap(obj.NavigationAxes, c);
-                set(obj.NavigationAxes, 'CLim', clim);
                 
                 ylabel(obj.NavigationAxes, 'Frequency (Hz)');
                 xlabel(obj.NavigationAxes, 'Time (s)');
@@ -698,6 +701,12 @@ classdef VideoBrowser < handle
             
             numFrames = size(obj.VideoData, ndims(obj.VideoData));
         end
+        function updateNavigationAxesContextMenu(obj)
+            context_menu = uicontextmenu(obj.MainFigure);
+            menu_item = uimenu(context_menu, "Text", 'Alter color limits');
+            menu_item.MenuSelectedFcn = @(~, ~)CLimGUI(obj.NavigationAxes);
+            obj.NavigationAxes.ContextMenu = context_menu;
+        end
         function updateFrameMarker(obj, varargin)
             % Update the FrameMarker and FrameNumberMarker on the
             %   NavigationAxes to reflect the CurrentFrameNumber
@@ -713,7 +722,7 @@ classdef VideoBrowser < handle
             %   indicating what frame the video is on
             x = obj.mapFrameNumToAxesX(obj.CurrentFrameNum);
             if isempty(obj.FrameMarker) || ~isvalid(obj.FrameMarker)
-                obj.FrameMarker = line([x, x], obj.NavigationAxes.YLim, 'Parent', obj.NavigationAxes, 'Color', obj.FrameMarkerColor);
+                obj.FrameMarker = line([x, x], obj.NavigationAxes.YLim, 'Parent', obj.NavigationAxes, 'Color', obj.FrameMarkerColor, 'HitTest', 'off', 'PickableParts', 'none');
             else
                 obj.FrameMarker.XData = [x, x];
                 obj.FrameMarker.YData = ylim(obj.NavigationAxes);
@@ -728,7 +737,7 @@ classdef VideoBrowser < handle
                     frameNumberString = sprintf('%d', x);
             end
             if isempty(obj.FrameNumberMarker) || ~isvalid(obj.FrameNumberMarker)
-                obj.FrameNumberMarker = text(obj.NavigationAxes, x + 20/scale, mean(obj.NavigationAxes.YLim), frameNumberString, 'Color', obj.FrameMarkerColor);
+                obj.FrameNumberMarker = text(obj.NavigationAxes, x + 20/scale, mean(obj.NavigationAxes.YLim), frameNumberString, 'Color', obj.FrameMarkerColor, 'HitTest', 'off', 'PickableParts', 'none');
             else
                 obj.FrameNumberMarker.Position(1) = x + 20 / (scale / obj.NavigationZoom);
                 obj.FrameNumberMarker.String = frameNumberString;
@@ -810,6 +819,7 @@ classdef VideoBrowser < handle
             
             obj.NavigationDataFunction = newNavigationDataFunction;
             obj.drawNavigationData();
+            obj.updateNavigationAxesContextMenu();
         end
         function set.NavigationData(obj, newNavigationData)
             % Setter for the NavigationData property
