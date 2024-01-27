@@ -12,6 +12,7 @@ classdef CLimGUI < handle
         UpperBoundIncreaseButton    matlab.ui.control.UIControl
         UpperBoundDecreaseButton    matlab.ui.control.UIControl
         BoundEntries                matlab.ui.control.UIControl
+        IsSelectingCLim             logical
     end
     methods
         function obj = CLimGUI(imageOrAxes, increment, parent_figure)
@@ -44,6 +45,10 @@ classdef CLimGUI < handle
             else
                 obj.ParentFigure = parent_figure;
             end
+
+            obj.ParentFigure.WindowButtonDownFcn = @obj.MouseDownHandler;
+            obj.ParentFigure.WindowButtonUpFcn = @obj.MouseUpHandler;
+            obj.ParentFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
             
             obj.CLimIncrement = increment;
             obj.ControlPanel = uipanel("Parent", obj.ParentFigure);
@@ -67,6 +72,11 @@ classdef CLimGUI < handle
         end
         function AlterCLim(obj, bound, amount)
             obj.BoundEntries(bound).String = num2str(str2double(obj.BoundEntries(bound).String) + amount);
+            obj.SanitizeCLim();
+            obj.CLimChangeHandler();
+        end
+        function SetCLim(obj, bound, value)
+            obj.BoundEntries(bound).String = num2str(value);
             obj.SanitizeCLim();
             obj.CLimChangeHandler();
         end
@@ -104,6 +114,75 @@ classdef CLimGUI < handle
         function ApplyCLimToAxes(obj)
             new_clim = [str2double(obj.BoundEntries(1).String), str2double(obj.BoundEntries(2).String)];
             obj.ImageAxes.CLim = new_clim;
+        end
+        function inside = inHistogramAxes(obj, x, y)
+            % Determine if the given figure coordinates fall within the
+            %   borders of the HistogramAxes or not..
+            originalUnits = obj.HistogramAxes.Units;
+            obj.HistogramAxes.Units = "pixels";
+            if y < obj.HistogramAxes.Position(2)
+                inside = false;
+            elseif y > obj.HistogramAxes.Position(2) + obj.HistogramAxes.Position(4)
+                inside = false;
+            elseif (x < obj.HistogramAxes.Position(1))
+                inside = false;
+            elseif x > obj.HistogramAxes.Position(1) + obj.HistogramAxes.Position(3)
+                inside = false;
+            else
+                inside = true;
+            end
+            obj.HistogramAxes.Units = originalUnits;
+        end
+        function colorVal = mapFigureXToColor(obj, x)
+            % Convert a figure x coordinate to color val on the histogram
+            %   axes
+            originalUnits = obj.HistogramAxes.Units;
+            obj.HistogramAxes.Units = obj.ParentFigure.Units;
+            colorVal = (x - obj.HistogramAxes.Position(1)) * diff(obj.HistogramAxes.XLim) / obj.HistogramAxes.Position(3) + obj.HistogramAxes.XLim(1);
+            obj.HistogramAxes.Units = originalUnits;
+        end
+        function MouseMotionHandler(obj, ~, ~)
+            if obj.IsSelectingCLim
+                xFig = obj.ParentFigure.CurrentPoint(1, 1);
+                yFig = obj.ParentFigure.CurrentPoint(1, 2);
+    
+                if obj.inHistogramAxes(xFig, yFig)
+                    colorVal = obj.mapFigureXToColor(xFig);
+                    switch obj.ParentFigure.SelectionType
+                        case 'alt'
+                            % Right click
+                            obj.SetCLim(2, colorVal);
+                        otherwise
+                            % Left click
+                            obj.SetCLim(1, colorVal);
+                    end
+                end
+            end
+
+        end
+        function MouseDownHandler(obj, ~, ~)
+            % Handle user mouse click
+            xFig = obj.ParentFigure.CurrentPoint(1, 1);
+            yFig = obj.ParentFigure.CurrentPoint(1, 2);
+
+            if obj.inHistogramAxes(xFig, yFig)
+                % Mouse click is in histogram axes
+                obj.IsSelectingCLim = true;
+
+                colorVal = obj.mapFigureXToColor(xFig);
+                switch obj.ParentFigure.SelectionType
+                    case 'alt'
+                        % Right click
+                        obj.SetCLim(2, colorVal);
+                    otherwise
+                        % Left click
+                        obj.SetCLim(1, colorVal);
+                end
+            end
+            obj.CLimChangeHandler();
+        end
+        function MouseUpHandler(obj, ~, ~)
+            obj.IsSelectingCLim = false;
         end
     end
 end
