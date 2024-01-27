@@ -201,6 +201,8 @@ classdef VideoBrowser < handle
 '                                     in. Start with lower right to zoom ';
 '                                     out.';
 '   double-click on image axes =      restore original zoom';
+'   right click on nav axes =         open context menu';
+'                                        spectrogram mode: edit clim'
 '   left click/drag on nav axes =     select region of video';
 '   right click/drag on nav axes =    deselect region of video';
 '   scroll wheel =                    zoom in/out for nav axes or video';
