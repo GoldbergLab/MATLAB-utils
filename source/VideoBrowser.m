@@ -429,9 +429,9 @@ classdef VideoBrowser < handle
 
             % Set up navigation axes, divider, and video axes so they share
             % the vertical space based on the value of `fraction`
-            obj.NavigationAxes.Position =       [margin, statusBarHeight + margin,  1-2*margin, fraction - 1.5 * margin - statusBarHeight];
-            obj.NavigationDivider.Position =    [margin, fraction-dividerHeight/2,  1-2*margin, dividerHeight];
-            obj.VideoAxes.Position =            [margin, fraction + 2*margin,       1-2*margin, 1-fraction - 1.5 * margin];
+            obj.NavigationAxes.Position =    rangeCoerce([margin, statusBarHeight + margin,  1-2*margin, fraction - 1.5 * margin - statusBarHeight], [0, 1]);
+            obj.NavigationDivider.Position = rangeCoerce([margin, fraction-dividerHeight/2,  1-2*margin, dividerHeight], [0, 1]);
+            obj.VideoAxes.Position =         rangeCoerce([margin, fraction + 2*margin,       1-2*margin, 1-fraction - 1.5 * margin], [0, 1]);
         end
         function NavigationDividerMouseDown(obj, ~, ~)
             obj.IsNavDividerDragging = true;
@@ -447,7 +447,7 @@ classdef VideoBrowser < handle
             obj.VideoPanel =        uipanel(obj.MainFigure, 'Units', 'normalized', 'Position', [0, 0, 1, 1]);
             obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized');
             obj.NavigationAxes =    axes(obj.VideoPanel, 'Units', 'normalized', 'HitTest', 'on', 'PickableParts', 'all');
-            obj.NavigationDivider = uicontrol(obj.VideoPanel, 'Style','text', 'Units', 'normalized', 'String', '----------------------------', 'Visible','on', 'BackgroundColor', obj.MainFigure.Color, 'ButtonDownFcn', @obj.NavigationDividerMouseDown, 'Enable', 'off');
+            obj.NavigationDivider = uicontrol(obj.VideoPanel, 'ForegroundColor', 'black', 'BackgroundColor', 'black', 'Style','text', 'Units', 'normalized', 'String', '----------------------------', 'Visible','on', 'BackgroundColor', obj.MainFigure.Color, 'ButtonDownFcn', @obj.NavigationDividerMouseDown, 'Enable', 'off');
             obj.StatusBar =  uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'HorizontalAlignment', 'left');
             obj.HelpButton = uicontrol(obj.VideoPanel, 'Style', 'pushbutton', 'Units', 'normalized', 'String', '?', 'HorizontalAlignment', 'center', 'Callback', @obj.showHelp);
             obj.setNavigationAxesHeightFraction(0.175);
