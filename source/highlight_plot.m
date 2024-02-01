@@ -78,9 +78,15 @@ end
 % Find start/stop points for mask in indices
 [ons, offs] = findOnsetOffsetPairs(mask, [], true);
 
+if length(ons) < length(offs)
+    ons = [1, ons];
+elseif length(offs) < length(ons)
+    offs = [offs, length(mask)];
+end
+
 % Translate indices into actual x values
 ons = mask_x(ons);
-offs = mask_x(offs + 1);
+offs = mask_x(offs);
 
 % Get y-limits of axes, so we know how tall to make the rectangles
 ylimits = ylim(ax);
