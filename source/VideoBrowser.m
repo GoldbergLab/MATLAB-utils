@@ -27,6 +27,9 @@ classdef VideoBrowser < handle
         NavigationZoom          double = 1                          % Current navigation axes zoom factor
         ShiftKeyDown            logical = false                     % Boolean flag indicating whether or not the shift key is currently down
         NavigationDivider       matlab.ui.control.UIControl         % A button to allow user to drag navigation axes larger or smaller
+        ProfileTimes            uint64 = zeros(1, 10, 'uint64')
+        ProfileTimestamps       uint64 = zeros(1, 10, 'uint64')
+        ProfileCounts           double = zeros(1, 10)
     end
     properties
         MainFigure              matlab.ui.Figure                    % The main figure window
@@ -36,7 +39,7 @@ classdef VideoBrowser < handle
         NavigationAxes          matlab.graphics.axis.Axes           % Axes for displaying the 1D metric
     end
     properties
-        NavigationScrollMode    char = 'partial'        % How should navigation axes scroll when zoomed in? One of 'centered' (keep cursor centered), 'partial' (keep cursor within a margin), 'none' (no scrolling)
+        NavigationScrollMode    char = 'sweep'        % How should navigation axes scroll when zoomed in? One of 'centered' (keep cursor centered), 'partial' (keep cursor within a margin), 'sweep' (jump view when cursor gets near end), 'none' (no scrolling)
         ChannelMode = 'all'                             % For multichannel navigation data, which channels should be displayed when navigation function is 'audio' or 'spectrogram'. One of 'all', 'first', or a scalar/vector of channel indices
     end
     properties (SetObservable)
@@ -302,9 +305,29 @@ classdef VideoBrowser < handle
             warning('on', 'MATLAB:TIMER:RATEPRECISION');
             warning('on', 'MATLAB:timer:miliSecPrecNotAllowed');
         end
+        function tic(obj, timerNum)
+            obj.ProfileTimestamps(timerNum) = tic();
+        end
+        function toc(obj, timerNum)
+            obj.ProfileTimes(timerNum) = obj.ProfileTimes(timerNum) + (tic() - obj.ProfileTimestamps(timerNum));
+            obj.ProfileCounts(timerNum) = obj.ProfileCounts(timerNum) + 1;
+        end
+        function showTimes(obj)
+            fprintf('\n');
+            for timerNum = 1:length(obj.ProfileTimes)
+                fprintf('Timer #%02d: %f sec, %03d calls, %f sec/call, max freq: %f Hz\n', timerNum, double(obj.ProfileTimes(timerNum))/10000000, obj.ProfileCounts(timerNum), double(obj.ProfileTimes(timerNum)/obj.ProfileCounts(timerNum))/10000000, 1/(double(obj.ProfileTimes(timerNum)/obj.ProfileCounts(timerNum))/10000000));
+            end
+        end
+        function clearTimes(obj)
+            for timerNum = 1:length(obj.ProfileTimes)
+                obj.ProfileCounts(timerNum) = 0;
+                obj.ProfileTimes(timerNum) = 0;
+                obj.ProfileTimestamps(timerNum) = 0;
+            end
+        end
         function playFcn(obj, selectedOnly)
             % Display a new frame of the video while in play mode
-
+            obj.tic(1);
             try
                 if selectedOnly
                     % Move to next selected frame
@@ -328,11 +351,14 @@ classdef VideoBrowser < handle
                         throw(me);
                 end
             end
+            obj.toc(1);
         end
         function stopVideo(obj)
             % Stop audio/video playback
             stop(obj.AVPlayer);
             delete(obj.AVPlayer);
+            obj.showTimes();
+            obj.clearTimes();
         end
         function restartVideo(obj)
             % Stop, then restart audio/video playback
@@ -575,16 +601,16 @@ classdef VideoBrowser < handle
             % Calculate xlim
             fullTLim = [0, obj.getDuration()];
 
-            % Determine the current axes x value corresponding to the
-            % current frame number
-            xCenter = obj.mapFrameNumToAxesX(obj.CurrentFrameNum);
+            % Determine the current axes x value (time) corresponding to 
+            % the current frame number
+            tCenter = obj.mapFrameNumToAxesX(obj.CurrentFrameNum);
 
             % Determine current x limits of navigation axes
             currentTLim = xlim(obj.NavigationAxes(1));
 
             % Determine fraction of the way across the navigation axes the
             % current frame is
-            currentXFraction = (xCenter - currentTLim(1)) / diff(currentTLim);
+            currentXFraction = (tCenter - currentTLim(1)) / diff(currentTLim);
 
             % Calculate the desired x width of the navigation axes based on
             % the zoom level
@@ -593,7 +619,21 @@ classdef VideoBrowser < handle
                 case 'centered'
                     % User wants the frame marker to always be in the
                     % center of the axes
-                    newTLim = [xCenter - tWidth*0.5, xCenter + tWidth*0.5];
+                    newTLim = [tCenter - tWidth*0.5, tCenter + tWidth*0.5];
+                case 'sweep'
+                    % User wants view to jump forward whenever cursor gets
+                    % near edge
+                    margin = 0.1;
+                    if currentXFraction < margin
+                        % Need to scroll the axes left
+                        currentXFraction = 1-margin;
+                    end
+                    if currentXFraction > (1-margin)
+                        % Need to scroll the axes right
+                        currentXFraction = margin;
+                    end
+                    % Calculate new navigation axes xlim
+                    newTLim = [tCenter - tWidth*currentXFraction, tCenter + tWidth*(1-currentXFraction)];
                 case 'partial'
                     % User wants the frame marker to move across the
                     % navigation axes, but the axes should start scrolling
@@ -609,11 +649,11 @@ classdef VideoBrowser < handle
                         currentXFraction = (1-margin);
                     end
                     % Calculate new navigation axes xlim
-                    newTLim = [xCenter - tWidth*currentXFraction, xCenter + tWidth*(1-currentXFraction)];
+                    newTLim = [tCenter - tWidth*currentXFraction, tCenter + tWidth*(1-currentXFraction)];
                 case 'none'
                     % User wants no scrolling - the frame marker may go off
                     % the visible part of the navigation axes.
-                    newTLim = [xCenter - tWidth*currentXFraction, xCenter + tWidth*(1-currentXFraction)];
+                    newTLim = [tCenter - tWidth*currentXFraction, tCenter + tWidth*(1-currentXFraction)];
                 otherwise
                     error('Unknown navigation scroll mode: %s', obj.NavigationScrollMode);
             end
@@ -786,9 +826,6 @@ classdef VideoBrowser < handle
                     % User has a regular vector (or vectors) of data to plot 
                     % on the navigation axes
     
-                    % Determine # of frames in video
-                    numFrames = obj.getNumFrames();
-    
                     % Update navigation axes color map
                     obj.NavigationAxes(axNum).Colormap = obj.Colormap{axNum};
                     
@@ -903,6 +940,7 @@ classdef VideoBrowser < handle
             x = obj.mapFrameNumToAxesX(obj.CurrentFrameNum);
             numNavigtionAxes = obj.getNumNavigationAxes();
             if length(obj.FrameMarker) ~= numNavigtionAxes
+                delete(obj.FrameMarker);
                 obj.FrameMarker = matlab.graphics.primitive.Line.empty();
             end
             for axNum = 1:numNavigtionAxes
@@ -932,12 +970,15 @@ classdef VideoBrowser < handle
         function updateFrameSelection(obj, axNums)
             % Update the selection display to match the current selection
 
+            % Clear old selection highlight
             delete(obj.FrameSelectionHandles);
-
             obj.FrameSelectionHandles(:) = [];
+
+            % Create new selection highlight
+            highlight_x = linspace(0, obj.getDuration(), obj.getNumFrames()+1);
             for axNum = axNums
-                highlight_x = linspace(0, obj.getDuration(), obj.getNumFrames());
-                obj.FrameSelectionHandles = [obj.FrameSelectionHandles, highlight_plot(obj.NavigationAxes(axNum), highlight_x, obj.FrameSelection, obj.FrameSelectionColor)];
+                frameSelectionHandles = highlight_plot(obj.NavigationAxes(axNum), highlight_x, obj.FrameSelection, obj.FrameSelectionColor);
+                obj.FrameSelectionHandles = [obj.FrameSelectionHandles, frameSelectionHandles];
             end
         end
         function set.VideoFrameRate(obj, frameRate)
@@ -1024,9 +1065,18 @@ classdef VideoBrowser < handle
             % Setter for the CurrrentFrameNum property
             
             obj.CurrentFrameNum = mod(newFrameNum - 1, obj.getNumFrames()) + 1;
+            obj.tic(2);
             obj.updateVideoFrame();
+            drawnow;
+            obj.toc(2);
+            obj.tic(3);
             obj.updateFrameMarker();
+            drawnow;
+            obj.toc(3);
+            obj.tic(4);
             obj.updateNavigationXLim();
+            drawnow;
+            obj.toc(4);
         end
         function set.FrameMarkerColor(obj, newColor)
             % Setter for the FrameMarkerColor property
@@ -1119,26 +1169,31 @@ classdef VideoBrowser < handle
             %   index of the NavigationAxes it falls inside will be
             %   returned, otherwise false.
             
-            positions = vertcat(obj.NavigationAxes.Position);
-
+            navPositions = vertcat(obj.NavigationAxes.Position);
+            positions = zeros(obj.getNumNavigationAxes(), 4);
+            
+            positions(:, 2) = navPositions(:, 2);
             tooLow = y < positions(:, 2);
             if all(tooLow)
                 inside = false;
                 return;
             end
 
+            positions(:, 4) = navPositions(:, 4);
             tooHigh = y > (positions(:, 2) + positions(:, 4));
             if all(tooHigh)
                 inside = false;
                 return;
             end
 
+            positions(:, 1) = obj.NavigationPanel.Position(1);
             tooLeft = x < positions(:, 1);
             if all(tooLeft)
                 inside = false;
                 return;
             end
 
+            positions(:, 3) = obj.NavigationPanel.Position(3);
             tooRight = x > positions(:, 1) + positions(:, 3);
             if all(tooRight)
                 inside = false;
@@ -1189,16 +1244,16 @@ classdef VideoBrowser < handle
         function frameNum = mapFigureXToFrameNum(obj, x)
             % Convert a figure x coordinate to frame number based on the
             %   NavigationAxes position.
-            frameNum = round(obj.VideoFrameRate * ((x - obj.NavigationPanel.Position(1)) * diff(obj.NavigationAxes(1).XLim) / obj.NavigationPanel.Position(3) + obj.NavigationAxes(1).XLim(1)));
+            frameNum = 1 + round(obj.VideoFrameRate * ((x - obj.NavigationPanel.Position(1)) * diff(obj.NavigationAxes(1).XLim) / obj.NavigationPanel.Position(3) + obj.NavigationAxes(1).XLim(1)));
         end
         function x = mapFrameNumToFigureX(obj, frameNum)
             % Convert a frame number to a figure x coordinate based on the
             %   NavigationAxes position.
-            x = (frameNum/obj.VideoFrameRate) * (obj.NavigationAxes(1).Position(3) / diff(obj.NavigationAxes(1).XLim)) - obj.NavigationAxes(1).XLim(1) + obj.NavigationAxes(1).Position(1);
+            x = ((frameNum-1)/obj.VideoFrameRate) * (obj.NavigationAxes(1).Position(3) / diff(obj.NavigationAxes(1).XLim)) - obj.NavigationAxes(1).XLim(1) + obj.NavigationAxes(1).Position(1);
         end
         function x = mapFrameNumToAxesX(obj, frameNum)
             % Convert a frame number to a axes x coordinate
-            x = obj.getDuration()*(frameNum/obj.getNumFrames());
+            x = obj.getDuration()*((frameNum-1)/obj.getNumFrames());
         end
         function cancelZoom(obj)
             % Cancel a video axes zoom in progress
@@ -1512,7 +1567,7 @@ classdef VideoBrowser < handle
         end
         function ResizeHandler(obj, ~, ~)
             obj.updateVideoFrame();
-            obj.updateFrameMarker(true);
+            obj.updateFrameMarker();
         end
         function delete(obj)
             if isvalid(obj.AVPlayer)
