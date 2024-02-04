@@ -35,7 +35,7 @@ if arraySize(1) == 1 && arraySize(2) > 1 && length(slices) == 1
 end
 
 % Loop over slice dimensions and remove  out of bounds indices
-for dim = 1:length(varargin)
+for dim = 1:length(slices)
     slices{dim}(slices{dim} < 1) = [];
     slices{dim}(slices{dim} > arraySize(dim)) = [];
 end
