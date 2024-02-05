@@ -67,7 +67,11 @@ classdef VideoBrowser < handle
             %           in the second cell, as a C x N 2D array, where C is
             %           the number of audio channels, and N is the number 
             %           of audio samples.
-            %   NavigationDataOrFcn = either
+            %   NavigationDataOrFcn = one of the following, or a cell array
+            %           containing multiple of these options. If a cell 
+            %           array is passed, multiple navigation axes will be,
+            %           stacked each showing the selected navigation 
+            %           options in order from top tobottom.
             %       1. A 1 x N array, to be plotted in the NavigationAxes
             %       2. A function handle which takes N x H x W (x 3)
             %           VideoData array as an argument and returns a 1 x N 
@@ -86,12 +90,20 @@ classdef VideoBrowser < handle
             %           - 'spectrogram' - plot a spectrogram of the audio
             %       4. An empty array, or omitted, which results in blank 
             %           NavigationAxes
-            %   NavigationColor = a color specification for the points in
-            %       the NavigationAxes scatter plot. See the color argument
-            %       for the scatter function for documentation.
-            %   NavigationColormap = a colormap for the navigation axes
-            %   NavigationCLim = default color limits for the navigation
-            %       axes
+            %   NavigationColor = an optional color specification for the 
+            %       points in the NavigationAxes scatter plot. See the 
+            %       color argument for the scatter function for 
+            %       documentation. This can also be a cell array if 
+            %       multiple navigation axes are specified in the 
+            %       NavigationDataOrFcn argument.
+            %   NavigationColormap = an optional colormap for the 
+            %       navigation axes. This can also be a cell array if 
+            %       multiple navigation axes arespecified in the 
+            %       NavigationDataOrFcn argument.
+            %   NavigationCLim = optional color limits for the navigation 
+            %       axes, expressed as a two-element vector [cmin, cmax].
+            %       This can also be a cell array if multiple navigation 
+            %       axes are specified in the NavigationDataOrFcn argument.            
             %   title = a char array to use as the image title
 
             if ~exist('title', 'var') || isempty(title)
