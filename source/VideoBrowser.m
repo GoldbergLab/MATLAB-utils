@@ -299,6 +299,8 @@ classdef VideoBrowser < handle
             obj.AVPlayer.TimerFcn = @(~, ~)obj.playFcn(selectedOnly);
             obj.AVPlayer.TimerPeriod = 1 / abs(obj.PlaybackSpeed);
             obj.AVPlayer.UserData.selectedOnly = selectedOnly;
+            obj.AVPlayer.UserData.startSample = currentAudioSample;
+            obj.AVPlayer.UserData.WarnedAboutSkippingFrames = false;
 
             % Start playback
             obj.AVPlayer.play();
@@ -326,20 +328,40 @@ classdef VideoBrowser < handle
             end
         end
         function playFcn(obj, selectedOnly)
+            arguments
+                obj VideoBrowser
+                selectedOnly logical
+            end
+
             % Display a new frame of the video while in play mode
-            obj.tic(1);
+            audioTime = (obj.AVPlayer.UserData.startSample + obj.AVPlayer.CurrentSample - 1) / obj.AudioSampleRate;
+
             try
+                % Calculate how far we have to skip the video to keep up
+                % with the audio. If the video is keeping up, delta will
+                % equal 1, if not, delta will be > 1
+                lastFrame = obj.CurrentFrameNum;
+                nextFrame = round(audioTime * obj.VideoFrameRate);
+                delta = nextFrame - lastFrame;
+
+                if ~obj.AVPlayer.UserData.WarnedAboutSkippingFrames && delta > 1
+                    % Warn the user that we're skipping frames to keep the
+                    % video synced with audio, but only once
+                    warning('Warning, video display not keeping up with playback - skipping frames');
+                    obj.AVPlayer.UserData.WarnedAboutSkippingFrames = true;
+                end
+
                 if selectedOnly
                     % Move to next selected frame
-                    obj.incrementSelectedFrame(obj.PlayIncrement);
+                    obj.incrementSelectedFrame(delta);
                 else
                     % Move to next frame
-                    obj.incrementFrame(obj.PlayIncrement);
+                    obj.incrementFrame(delta);
                 end
                 
                 % Update status bar
                 obj.StatusBar.String = sprintf('Playing: Frame = %d / %d, time = %0.3f s', obj.CurrentFrameNum, obj.getNumFrames(), obj.CurrentFrameNum / obj.VideoFrameRate);
-                drawnow;
+%                 drawnow;
             catch me
                 switch me.identifier
                     case {'images:imshow:invalidAxes', 'MATLAB:VideoBrowser:noSelection'}
@@ -351,14 +373,11 @@ classdef VideoBrowser < handle
                         throw(me);
                 end
             end
-            obj.toc(1);
         end
         function stopVideo(obj)
             % Stop audio/video playback
             stop(obj.AVPlayer);
             delete(obj.AVPlayer);
-            obj.showTimes();
-            obj.clearTimes();
         end
         function restartVideo(obj)
             % Stop, then restart audio/video playback
@@ -383,7 +402,7 @@ classdef VideoBrowser < handle
             end
             skipAmount = nextFrameNum - obj.CurrentFrameNum;
             obj.CurrentFrameNum = nextFrameNum;
-            if obj.isPlaying() && skipAmount ~= 1
+            if obj.isPlaying() && skipAmount ~= delta
                 % If we're skipping to some other frame other than the
                 % next one, we need to restart the player so the audio
                 % will skip with the video
@@ -1063,20 +1082,11 @@ classdef VideoBrowser < handle
         end
         function set.CurrentFrameNum(obj, newFrameNum)
             % Setter for the CurrrentFrameNum property
-            
             obj.CurrentFrameNum = mod(newFrameNum - 1, obj.getNumFrames()) + 1;
-            obj.tic(2);
             obj.updateVideoFrame();
-            drawnow;
-            obj.toc(2);
-            obj.tic(3);
             obj.updateFrameMarker();
-            drawnow;
-            obj.toc(3);
-            obj.tic(4);
             obj.updateNavigationXLim();
             drawnow;
-            obj.toc(4);
         end
         function set.FrameMarkerColor(obj, newColor)
             % Setter for the FrameMarkerColor property
