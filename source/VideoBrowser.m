@@ -123,7 +123,7 @@ classdef VideoBrowser < handle
                 NavigationColors = 'black';
             end
             if ~exist('NavigationColormaps', 'var') || isempty(NavigationColormaps)
-                NavigationColormaps = colormap();
+                NavigationColormaps = colormap(obj.MainFigure);
             end
             if ~exist('NavigationCLims', 'var') || isempty(NavigationCLims)
                 % Set default navigation axes color limits
@@ -524,7 +524,7 @@ classdef VideoBrowser < handle
             % Create graphics containers
             obj.MainFigure =        figure('Units', 'normalized');
             obj.VideoPanel =        uipanel(obj.MainFigure, 'Units', 'normalized', 'Position', [0, 0, 1, 1]);
-            obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized');
+            obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized', 'Visible', false);
             obj.NavigationPanel =   uipanel(obj.VideoPanel, 'Units', 'normalized');
             obj.NavigationAxes = matlab.graphics.axis.Axes.empty(0, obj.getNumNavigationAxes());
             for axNum = 1:obj.getNumNavigationAxes()
@@ -562,6 +562,7 @@ classdef VideoBrowser < handle
             obj.VideoAxes.XTickLabel = [];
             obj.VideoAxes.XTick = [];
             axis(obj.VideoAxes, 'off');
+            obj.VideoAxes.Visible = true;
 
             % Configure callbacks
             obj.MainFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
@@ -572,6 +573,8 @@ classdef VideoBrowser < handle
             obj.MainFigure.KeyPressFcn = @obj.KeyPressHandler;
             obj.MainFigure.KeyReleaseFcn = @obj.KeyReleaseHandler;
             obj.MainFigure.SizeChangedFcn = @obj.ResizeHandler;
+
+            drawnow()
         end
         function updateVideoFrame(obj)
             % Update the displayed video frame based on the current
