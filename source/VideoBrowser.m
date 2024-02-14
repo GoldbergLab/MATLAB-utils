@@ -793,10 +793,12 @@ classdef VideoBrowser < handle
                         obj.clearNavigationData(axNum);
     
                         % Determine width of axes in pixels
-                        originalUnits = get(obj.NavigationAxes(axNum), 'units');
-                        set(obj.NavigationAxes(axNum),'Units', 'pixels');
-                        pixSize = get(obj.NavigationAxes(axNum), 'Position');
-                        set(obj.NavigationAxes(axNum),'Units', originalUnits);
+                        originalUnits = obj.NavigationAxes(axNum).Units;
+                        obj.NavigationAxes(axNum).Units = 'pixels';
+                        pixSize = obj.NavigationAxes(axNum).Position;
+                        obj.NavigationAxes(axNum).Units = originalUnits;
+
+                        % Set colormap
     
                         % Time resolution of spectrogram relative to axes width
                         nCourse = 0.005;
@@ -1193,29 +1195,30 @@ classdef VideoBrowser < handle
             
             navPositions = vertcat(obj.NavigationAxes.Position);
             positions = zeros(obj.getNumNavigationAxes(), 4);
+            parentPosition = obj.NavigationPanel.Position;
             
-            positions(:, 2) = navPositions(:, 2);
+            positions(:, 2) = parentPosition(1) + navPositions(:, 2) * parentPosition(4);
             tooLow = y < positions(:, 2);
             if all(tooLow)
                 inside = false;
                 return;
             end
 
-            positions(:, 4) = navPositions(:, 4);
+            positions(:, 4) = navPositions(:, 4) * parentPosition(4);
             tooHigh = y > (positions(:, 2) + positions(:, 4));
             if all(tooHigh)
                 inside = false;
                 return;
             end
 
-            positions(:, 1) = obj.NavigationPanel.Position(1);
+            positions(:, 1) = parentPosition(1) + obj.NavigationPanel.Position(1) * parentPosition(3);
             tooLeft = x < positions(:, 1);
             if all(tooLeft)
                 inside = false;
                 return;
             end
 
-            positions(:, 3) = obj.NavigationPanel.Position(3);
+            positions(:, 3) = obj.NavigationPanel.Position(3) * parentPosition(3);
             tooRight = x > positions(:, 1) + positions(:, 3);
             if all(tooRight)
                 inside = false;
