@@ -1,7 +1,7 @@
-function position = getWidgetScreenPosition(widget, units)
+function position = getWidgetFigurePosition(widget, units)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% getWidgetScreenPosition: get the position of a widget in screen coords
-% usage:  position = getWidgetScreenPosition(widget, units)
+% getWidgetFigurePosition: get the position of a widget in figure coords
+% usage:  position = getWidgetFigurePosition(widget, units)
 %
 % where,
 %    widget is a graphics component
@@ -11,7 +11,7 @@ function position = getWidgetScreenPosition(widget, units)
 % The Position property of MATLAB graphics components gives the position of
 %   a graphics widget relative to the lower left corner of its parent
 %   widget. This function determines the position of the widget relative to
-%   the lower left corner of the screen.
+%   the lower left corner of the figure ancestor of the widget.
 %
 % See also: 
 %
@@ -37,12 +37,17 @@ parent.Units = units;
 % Set the widget units to 'normalized'
 widget.Units = 'normalized';
 
-% Get the parent figure's screen position
+% Get the parent widget's figure position
 switch class(parent)
     case 'matlab.ui.Figure'
-        parent_position = parent.Position;
+        switch units
+            case 'normalized'
+                parent_position = [0, 0, 1, 1];
+            otherwise
+                parent_position = [0, 0, parent.Position(3), parent.Position(4)];
+        end
     otherwise
-        parent_position = getWidgetScreenPosition(parent, units);
+        parent_position = getWidgetFigurePosition(parent, units);
 end
 
 % Get the widgets position relative to the parent position
