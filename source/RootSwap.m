@@ -35,7 +35,7 @@ function alteredPaths = RootSwap(originalPaths, originalRoots, newRoots)
 % search/replace fields with the root directory of each path.
 
 if ischar(originalPaths)
-    originalPaths = cell(originalPaths);
+    originalPaths = {originalPaths};
 end
 
 if exist('originalRoots', 'var')
@@ -46,10 +46,10 @@ if exist('originalRoots', 'var')
     % swap the roots
 
     if ischar(originalRoots)
-        originalRoots = cell(originalRoots);
+        originalRoots = {originalRoots};
     end
     if ischar(newRoots)
-        newRoots = cell(newRoots);
+        newRoots = {newRoots};
     end
 
     alteredPaths = originalPaths;
