@@ -36,6 +36,9 @@ function alteredPaths = RootSwap(originalPaths, originalRoots, newRoots)
 
 if ischar(originalPaths)
     originalPaths = {originalPaths};
+    deCellify = true;
+else
+    deCellify = false;
 end
 
 if exist('originalRoots', 'var')
@@ -77,4 +80,8 @@ else
     roots = unique(roots);
     
     alteredPaths = PathSwap(originalPaths, roots, roots);
+end
+
+if deCellify
+    alteredPaths = alteredPaths{1};
 end
