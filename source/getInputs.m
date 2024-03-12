@@ -18,25 +18,31 @@ cancelButton = uicontrol('Parent', f, 'String', 'Cancel', 'Callback', @cancel, '
 inputLabels = gobjects(1, numInputs);
 inputControls = gobjects(1, numInputs);
 for inputNum = 1:numInputs
-    inputClass = class(defaults{inputNum});
+    default = defaults{inputNum};
+    inputClass = class(default);
     switch inputClass
         case 'char'
             % Text input
             style = 'edit';
-            string = defaults{inputNum};
+            string = default;
             value = [];
         case {'single', 'double', 'int8', 'int16', 'int64', 'int32', 'uint8', 'uint16', 'uint32', 'uint64'}
             % Numerical input
             style = 'edit';
-            string = num2str(defaults{inputNum});
+            string = num2str(default);
             value = [];
+        case 'logical'
+            % Boolean input
+            style = 'checkbox';
+            string = '';
+            value = default;
         case 'categorical'
             % List input
             style = 'popupmenu';
-            string = categories(defaults{inputNum})';
-            value = find(strcmp(char(defaults{inputNum}), string), 1);
+            string = categories(default)';
+            value = find(strcmp(char(default), string), 1);
         otherwise
-            error('Input %s has unsupported input class: %s', names{inputNum}, class(defaults{inputNum}));
+            error('Input %s has unsupported input class: %s', names{inputNum}, class(default));
     end
 
     labelPosition = [0, 1 - inputNum / numInputs, 0.29, 1 / numInputs];
