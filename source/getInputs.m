@@ -31,12 +31,35 @@ end
 
 numInputs = length(names);
 
-f = figure('NumberTitle', 'off', 'Name', titleText);
+titleCharacterHeight = 2;
+
+f = figure('NumberTitle', 'off', 'Name', titleText, 'Units', 'characters', 'WindowKeyPressFcn', @keypress, 'ToolBar', 'none', 'MenuBar', 'none');
+
+f.Position(4) = titleCharacterHeight + 1 + 3*numInputs;
 f.UserData.Cancelled = true;
-titleLabel = uicontrol('Parent', f, 'String', titleText, 'Style', 'text', 'Units', 'normalized', 'Position', [0.01, 0.90, 0.98, 0.09], 'FontSize', 20);
-inputPanel = uipanel('Parent', f, 'BorderType', 'beveledin', 'BorderWidth', 3, 'Units', 'normalized', 'Position', [0.01, 0.11, 0.98, 0.78]);
+
 okButton = uicontrol('Parent', f, 'String', 'OK', 'Callback', @ok, 'Units', 'normalized', 'Position', [0.01, 0.01, 0.485, 0.09]);
 cancelButton = uicontrol('Parent', f, 'String', 'Cancel', 'Callback', @cancel, 'Units', 'normalized', 'Position', [0.505, 0.01, 0.485, 0.09]);
+okButton.Units = 'characters';
+cancelButton.Units = 'characters';
+okButton.Position(4) = 2;
+cancelButton.Position(4) = 2;
+okButton.Units = 'normalized';
+cancelButton.Units = 'normalized';
+
+titleLabel = uicontrol('Parent', f, 'String', titleText, 'Style', 'text', 'Units', 'normalized', 'Position', [0.01, 0.90, 0.98, 0.09], 'FontSize', 20);
+titleLabel.Units = 'characters';
+titleLabel.Position(2) = titleLabel.Position(2) + titleLabel.Position(4) - titleCharacterHeight;
+titleLabel.Position(4) = titleCharacterHeight;
+titleLabel.Units = 'normalized';
+
+y0 = okButton.Position(2) + okButton.Position(4) + 0.01;
+y1 = titleLabel.Position(2) - 0.01;
+
+inputPanel = uipanel('Parent', f, 'BorderType', 'beveledin', 'BorderWidth', 3, 'Units', 'normalized', 'Position', [0.01, y0, 0.99, y1 - y0]);
+inputPanel.Units = 'characters';
+inputPanel.Position(4) = inputPanel.Position(4) - titleCharacterHeight;
+inputPanel.Units = 'normalized';
 inputLabels = gobjects(1, numInputs);
 inputControls = gobjects(1, numInputs);
 for inputNum = 1:numInputs
@@ -73,7 +96,7 @@ for inputNum = 1:numInputs
     if isempty(descriptions{inputNum})
         prompt = [names{inputNum}];
     else
-        prompt = [names{inputNum}, ': ', descriptions{inputNum}];
+        prompt = [names{inputNum}, ' (', descriptions{inputNum}, ')'];
     end
     
     % Create label
@@ -115,9 +138,18 @@ try
 catch
 end
 
+function keypress(src, event)
+    switch event.Key
+        case {'return', 'enter'}
+            ok(src);
+        case 'escape'
+            cancel(src);
+    end
 function ok(src, ~)
-    src.Parent.UserData.Cancelled = false;
+    f = ancestor(src, 'figure');
+    f.UserData.Cancelled = false;
     uiresume();
 function cancel(src, ~)
-    src.Parent.UserData.Cancelled = true;
+    f = ancestor(src, 'figure');
+    f.UserData.Cancelled = true;
     uiresume();
