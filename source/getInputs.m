@@ -1,5 +1,27 @@
 function inputs = getInputs(titleText, names, defaults, descriptions)
-% Create a simple GUI to get arbitrary user input
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% getInputs: Create a simple GUI to get arbitrary user input
+% usage:  inputs = getInputs(titleText, names, defaults, descriptions)
+%
+% where,
+%    titleText is a char array to use as a dialog title
+%    names is a cell array of names
+%    defaults is a cell array of default values, of the same size as names
+%    descriptions is a cell array of descriptions of each parameter, of the
+%       same size as names
+%    inputs is a cell array containing the values the user chose, in the 
+%       same order as provided in the arguments. If the user pressed 
+%       cancel, inputs will be an empty cell array.
+%
+% Create a parameter dialog for an arbitrary number and type of parameters.
+%
+% See also: <related functions>
+%
+% Version: 1.0
+% Author:  Brian Kardon
+% Email:   bmk27=cornell*org, brian*kardon=google*com
+% Real_email = regexprep(Email,{'=','*'},{'@','.'})
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
     titleText char
     names cell
@@ -76,6 +98,9 @@ else
             case {'single', 'double', 'int8', 'int16', 'int64', 'int32', 'uint8', 'uint16', 'uint32', 'uint64'}
                 % Numerical input
                 inputs{inputNum} = cast(str2double(control.String), inputClass);
+            case 'logical'
+                % Boolean input
+                inputs{inputNum} = logical(control.Value);
             case 'categorical'
                 % List input
                  inputs{inputNum} = categorical(control.String(control.Value), categories(defaults{inputNum}));
