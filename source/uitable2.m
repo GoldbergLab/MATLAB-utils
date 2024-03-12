@@ -1,6 +1,7 @@
 classdef uitable2 < handle
     %% Additional properties
     properties (SetAccess = private)
+        PreviousSelection = []
         Selection       = []
         Size
         NumRows
@@ -12,6 +13,7 @@ classdef uitable2 < handle
     properties
         RowSelectionColor = [0.7, 0.7, 1];
         SelectedRow     = []
+        ColumnSelectable = logical.empty()   % Can a click in this column change the row selection?
     end
     properties
         %% Overridden properties
@@ -73,18 +75,30 @@ classdef uitable2 < handle
 
         function SelectionCallback(obj, src, event)
             if ~isempty(event.Indices) && ~isequal(obj.Selection, event.Indices)
+                % Update PreviousSelection property
+                obj.PreviousSelection = obj.Selection;
                 % Update Selection property
                 obj.Selection = event.Indices;
-                % Update SelectedRow property
-                obj.SelectedRow = min(obj.Selection(:, 1));
-                obj.UpdateBackgroundColor();
+                if isempty(event.Indices) || obj.ColumnSelectable(event.Indices(1, 2))
+                    % First selection index is not in a non-selectable column.
+                    % Update SelectedRow
+                    % Update SelectedRow property
+                    obj.SelectedRow = min(obj.Selection(:, 1));
+                    obj.UpdateBackgroundColor();
+                end
                 % Call callback
                 obj.CellSelectionCallback(src, event);
             end
-            pause(0.001)
         end
 
         %% New getters/setters
+        function set.ColumnSelectable(obj, value)
+            if ~isempty(value) && (~isrow(value) || length(value) ~= obj.NumColumns || ~islogical(value))
+                error('ColumnSelectable must be a logical row vector with length equal to the number of columns, or an empty array.')
+            end
+            obj.ColumnSelectable = value;
+        end
+
         function set.SelectedRow(obj, value)
             if ~isequal(obj.SelectedRow, value)
                 obj.SelectedRow = value;
@@ -378,7 +392,7 @@ classdef uitable2 < handle
         end
 
         function set.BackgroundColor(obj, value)
-            if size(value, 1) ~= obj.Size(2) || size(value, 2) ~= 3
+            if size(value, 1) ~= obj.Size(1) || size(value, 2) ~= 3
                 error('Background color size must be a Mx3 array, where M is the number of rows in the data');
             end
             obj.UserBackgroundColor = value;
