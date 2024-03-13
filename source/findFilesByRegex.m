@@ -1,11 +1,12 @@
-function [filePaths, varargout] = findFilesByRegex(rootDir, regex, matchPath, recurse, includeFolders, includeFiles)
+function [filePaths, varargout] = findFilesByRegex(rootDirOrTree, regex, matchPath, recurse, includeFolders, includeFiles)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % findFilesByRegex: Search rootDir for file paths that match the regex
 % usage:  filePaths = findFilesByRegex(rootDir, regex)
 %         [filePaths, token1, token2...] = findFilesByRegex(rootDir, regex)
 %
 % where,
-%    rootDir is a char array representing a directory to recursively search
+%    rootDirOrTree is a char array representing a directory to recursively 
+%       search or a file tree struct of the form returned by buildFileTree
 %    regex is char array representing a file regex to match. Note that if
 %       the regex contains one or more capturing groups, the text of those
 %       captured groups can be retrieved from varargout. Default is '.*'.
@@ -47,7 +48,7 @@ function [filePaths, varargout] = findFilesByRegex(rootDir, regex, matchPath, re
 %     fileNms = 
 %       {'1', '4', '7'}
 %
-% See also: dir
+% See also: dir, buildFileTree
 %
 % Version: 1.0
 % Author:  Brian Kardon
@@ -75,26 +76,53 @@ if ~exist('includeFiles', 'var') || isempty(includeFiles)
     includeFiles = true;
 end
 
-if strcmp(rootDir, '.')
-    % To allow for matching paths, convert '.' to absolute path
-    rootDir = pwd();
-elseif strcmp(rootDir, '..')
-    % To allow for matching paths, convert '..' to absolute path
-    [rootDir, ~, ~] = fileparts(pwd());
+if isstruct(rootDirOrTree)
+    % This must be a struct of the form returned by buildFileTree
+    useTree = true;
+else
+    useTree = false;
 end
 
-files = dir(rootDir);
-% Exclude dot directores - '.' and '..'
-files = files(~cellfun(@isDotDir, {files.name}));
-
-dirs = files([files.isdir]);
-if ~includeFolders
-    % Exclude directories
-    files = files(~[files.isdir]);
+if ~useTree
+    if strcmp(rootDirOrTree, '.')
+        % To allow for matching paths, convert '.' to absolute path
+        rootDirOrTree = pwd();
+    elseif strcmp(rootDirOrTree, '..')
+        % To allow for matching paths, convert '..' to absolute path
+        [rootDirOrTree, ~, ~] = fileparts(pwd());
+    end
 end
-if ~includeFiles
-    % Exclude regular files
-    files = files([files.isdir]);
+
+if useTree
+    if includeFiles
+        files = rootDirOrTree.Files;
+    else
+        files = {};
+    end
+    if ~isempty(rootDirOrTree.Dirs)
+        dirs = {rootDirOrTree.Dirs.Path};
+    else
+        dirs = {};
+    end
+    if includeFolders
+        files = [files, dirs];
+    end
+    
+else
+    files = dir(rootDirOrTree);
+    % Exclude dot directores - '.' and '..'
+    files = files(~cellfun(@isDotDir, {files.name}));
+    
+    dirs = files([files.isdir]);
+
+    if ~includeFolders
+        % Exclude directories
+        files = files(~[files.isdir]);
+    end
+    if ~includeFiles
+        % Exclude regular files
+        files = files([files.isdir]);
+    end
 end
 
 numTokens = nargout-1;
@@ -106,9 +134,15 @@ for k = 1:numTokens
 end
 
 for k = 1:length(files)
-    [~, name, ext] = fileparts(files(k).name);
+    if useTree
+        [~, filename, ext] = fileparts(rootDirOrTree.Files{k});
+        filename = [filename, ext]; %#ok<AGROW> 
+    else
+        filename = files(k).name;
+    end
+    [~, name, ext] = fileparts(filename);
     if matchPath
-        matchName = fullfile(rootDir, files(k).name);
+        matchName = fullfile(rootDirOrTree, filename);
     else
         matchName = [name, ext];
     end
@@ -116,7 +150,12 @@ for k = 1:length(files)
     [match, tokens] = regexp(matchName, regex, 'start', 'tokens');
 
     if match
-        filePaths(end+1) = {fullfile(rootDir, files(k).name)};
+        if useTree
+            filepath = rootDirOrTree.Files{k};
+        else
+            filepath = fullfile(rootDirOrTree, files(k).name);
+        end
+        filePaths{end+1} = filepath; %#ok<AGROW> 
         if ~isempty(tokens) && numTokens > 0
             tokens = tokens{1};
             for j = 1:length(tokens)
@@ -135,16 +174,25 @@ if recurse
     % Loop over subdirectories
     for k = 1:length(dirs)
         % Make sure we're not operating on a dot pseudo directory
-        if ~any(strcmp(dirs(k).name, {'.', '..'}))
-            dirpath = fullfile(rootDir, dirs(k).name);
+        if useTree
+            [~, dirName, ~] = fileparts(rootDirOrTree.Dirs(k).Path);
+        else
+            dirName = dirs(k).name;
+        end
+        if ~any(strcmp(dirName, {'.', '..'}))
+            if useTree
+                newRootDirOrTree = rootDirOrTree.Dirs(k);
+            else
+                newRootDirOrTree = fullfile(rootDirOrTree, dirName);
+            end
             % Initialize file token cell array for subfolder
             newFileTokens = cell(1, numTokens);
             % Run function recursively to capture output from subfolder 
             %   tree
-            [newFilePaths, newFileTokens{:}] = findFilesByRegex(dirpath, regex, matchPath, recurse, includeFolders, includeFiles);
+            [newFilePaths, newFileTokens{:}] = findFilesByRegex(newRootDirOrTree, regex, matchPath, recurse, includeFolders, includeFiles);
             % Append subfolder tree path outputs to current folder path 
             %   outputs
-            filePaths = [filePaths, newFilePaths];
+            filePaths = [filePaths, newFilePaths]; %#ok<AGROW> 
             % Initialize fileTokens if it doesn't have any tokens from the
             %   current folder already.
             if isempty(fileTokens)
