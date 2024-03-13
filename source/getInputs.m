@@ -46,9 +46,9 @@ height = f.Position(4);
 okButton = uicontrol('Parent', f, 'String', 'OK', 'Callback', @ok, 'Units', 'characters', 'Position', [xMargin, yMargin, (width-3*xMargin)/2, buttonHeight]);
 cancelButton = uicontrol('Parent', f, 'String', 'Cancel', 'Callback', @cancel, 'Units', 'characters', 'Position', [(width+xMargin)/2, yMargin, (width-3*xMargin)/2, buttonHeight]); %#ok<NASGU> 
 
-titleLabel = uicontrol('Parent', f, 'String', titleText, 'Style', 'text', 'Units', 'characters', 'Position', [xMargin, height - titleCharacterHeight - yMargin, width-2*xMargin, titleCharacterHeight], 'FontSize', 20); %#ok<NASGU> 
+titleLabel = uicontrol('Parent', f, 'String', titleText, 'Style', 'text', 'Units', 'characters', 'Position', [xMargin, height - titleCharacterHeight - yMargin, width-2*xMargin, titleCharacterHeight], 'FontUnits', 'normalized', 'FontSize', 0.8);
 
-inputPanel = uipanel('Parent', f, 'BorderType', 'beveledin', 'BorderWidth', 3, 'Units', 'characters', 'Position', [xMargin, okButton.Position(2)+buttonHeight + yMargin, width - 2*xMargin, height - titleCharacterHeight - buttonHeight - 2*yMargin]);
+inputPanel = uipanel('Parent', f, 'BorderType', 'beveledin', 'BorderWidth', 3, 'Units', 'characters', 'Position', [xMargin, okButton.Position(2) + buttonHeight + yMargin, width - 2*xMargin, titleLabel.Position(2) - (okButton.Position(2) + buttonHeight + 2*yMargin)]);
 inputLabels = gobjects(1, numInputs);
 inputControls = gobjects(1, numInputs);
 for inputNum = 1:numInputs
