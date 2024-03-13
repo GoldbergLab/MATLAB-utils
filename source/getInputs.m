@@ -31,35 +31,24 @@ end
 
 numInputs = length(names);
 
-titleCharacterHeight = 2;
+titleCharacterHeight = 2.5;
+buttonHeight = 2;
+xMargin = 0.5;
+yMargin = 0.2;
 
-f = figure('NumberTitle', 'off', 'Name', titleText, 'Units', 'characters', 'WindowKeyPressFcn', @keypress, 'ToolBar', 'none', 'MenuBar', 'none');
-
-f.Position(4) = titleCharacterHeight + 1 + 3*numInputs;
+f = figure('NumberTitle', 'off', 'Name', titleText, 'Units', 'characters', 'WindowKeyPressFcn', @keypress, 'ToolBar', 'none', 'MenuBar', 'none', 'Resize', 'off');
+f.Position(4) = titleCharacterHeight + buttonHeight + 3*numInputs;
 f.UserData.Cancelled = true;
 
-okButton = uicontrol('Parent', f, 'String', 'OK', 'Callback', @ok, 'Units', 'normalized', 'Position', [0.01, 0.01, 0.485, 0.09]);
-cancelButton = uicontrol('Parent', f, 'String', 'Cancel', 'Callback', @cancel, 'Units', 'normalized', 'Position', [0.505, 0.01, 0.485, 0.09]);
-okButton.Units = 'characters';
-cancelButton.Units = 'characters';
-okButton.Position(4) = 2;
-cancelButton.Position(4) = 2;
-okButton.Units = 'normalized';
-cancelButton.Units = 'normalized';
+width = f.Position(3);
+height = f.Position(4);
 
-titleLabel = uicontrol('Parent', f, 'String', titleText, 'Style', 'text', 'Units', 'normalized', 'Position', [0.01, 0.90, 0.98, 0.09], 'FontSize', 20);
-titleLabel.Units = 'characters';
-titleLabel.Position(2) = titleLabel.Position(2) + titleLabel.Position(4) - titleCharacterHeight;
-titleLabel.Position(4) = titleCharacterHeight;
-titleLabel.Units = 'normalized';
+okButton = uicontrol('Parent', f, 'String', 'OK', 'Callback', @ok, 'Units', 'characters', 'Position', [xMargin, yMargin, (width-3*xMargin)/2, buttonHeight]);
+cancelButton = uicontrol('Parent', f, 'String', 'Cancel', 'Callback', @cancel, 'Units', 'characters', 'Position', [(width+xMargin)/2, yMargin, (width-3*xMargin)/2, buttonHeight]); %#ok<NASGU> 
 
-y0 = okButton.Position(2) + okButton.Position(4) + 0.01;
-y1 = titleLabel.Position(2) - 0.01;
+titleLabel = uicontrol('Parent', f, 'String', titleText, 'Style', 'text', 'Units', 'characters', 'Position', [xMargin, height - titleCharacterHeight - yMargin, width-2*xMargin, titleCharacterHeight], 'FontSize', 20); %#ok<NASGU> 
 
-inputPanel = uipanel('Parent', f, 'BorderType', 'beveledin', 'BorderWidth', 3, 'Units', 'normalized', 'Position', [0.01, y0, 0.99, y1 - y0]);
-inputPanel.Units = 'characters';
-inputPanel.Position(4) = inputPanel.Position(4) - titleCharacterHeight;
-inputPanel.Units = 'normalized';
+inputPanel = uipanel('Parent', f, 'BorderType', 'beveledin', 'BorderWidth', 3, 'Units', 'characters', 'Position', [xMargin, okButton.Position(2)+buttonHeight + yMargin, width - 2*xMargin, height - titleCharacterHeight - buttonHeight - 2*yMargin]);
 inputLabels = gobjects(1, numInputs);
 inputControls = gobjects(1, numInputs);
 for inputNum = 1:numInputs
