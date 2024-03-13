@@ -9,13 +9,28 @@ function tree = buildFileTree(rootDir)
 %    tree is a recursive struct containing the following fields:
 %       Path = a char array representing the directory path
 %       Dirs = an array of trees, one for each subdirectory
-%       Files = a cell array of char arrays representing paths to files
-%           within this directory.
+%       Files = a cell array of char arrays representing filenames within 
+%           this directory.
 %
 % This is a function that builds a file tree representing all the files and
 %   folders within a given root directory. It is built to use with
 %   findFilesByRegex, to greatly speed up repeated searches of large file
-%   systems.
+%   systems. For example, this code can be sped up:
+%
+%       rootDir = 'C:\path\to\root';
+%       list1 = findFilesByRegex(rootDir, regex1);
+%       list2 = findFilesByRegex(rootDir, regex2);
+%       ...
+%       listN = findFilesByRegex(rootDir, regexN);
+%
+%   by building a tree first, like so:
+%
+%       rootDir = 'C:\path\to\root';
+%       tree = buildFileTree(rootDir);
+%       list1 = findFilesByRegex(tree, regex1);
+%       list2 = findFilesByRegex(tree, regex2);
+%       ...
+%       listN = findFilesByRegex(tree, regexN);
 %
 % See also: findFilesByRegex, dir
 %
