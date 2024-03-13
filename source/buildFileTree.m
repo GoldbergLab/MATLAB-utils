@@ -43,9 +43,9 @@ dirs = files(dirMask);
 files = files(~dirMask);
 
 % Construct full paths for files and directories
-pathify = @(d)fullfile(rootDir, d.name);
-dirPaths = arrayfun(pathify, dirs, 'UniformOutput', false);
-filePaths = arrayfun(pathify, files, 'UniformOutput', false);
+fullpathify = @(d)fullfile(rootDir, d.name);
+dirPaths = arrayfun(fullpathify, dirs, 'UniformOutput', false);
+filePaths = {files.name};
 
 % Assign the root dir path to the Path field
 tree.Path = rootDir;

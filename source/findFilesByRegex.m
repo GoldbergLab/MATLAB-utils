@@ -107,7 +107,6 @@ if useTree
     if includeFolders
         files = [files, dirs];
     end
-    
 else
     files = dir(rootDirOrTree);
     % Exclude dot directores - '.' and '..'
@@ -135,15 +134,14 @@ end
 
 for k = 1:length(files)
     if useTree
-        [~, filename, ext] = fileparts(rootDirOrTree.Files{k});
-        filename = [filename, ext]; %#ok<AGROW> 
+        filename = rootDirOrTree.Files{k};
     else
         filename = files(k).name;
     end
-    [~, name, ext] = fileparts(filename);
     if matchPath
         matchName = fullfile(rootDirOrTree, filename);
     else
+        [~, name, ext] = fileparts(filename);
         matchName = [name, ext];
     end
     
@@ -151,9 +149,9 @@ for k = 1:length(files)
 
     if match
         if useTree
-            filepath = rootDirOrTree.Files{k};
+            filepath = fullfile(rootDirOrTree.Path, filename);
         else
-            filepath = fullfile(rootDirOrTree, files(k).name);
+            filepath = fullfile(rootDirOrTree, filename);
         end
         filePaths{end+1} = filepath; %#ok<AGROW> 
         if ~isempty(tokens) && numTokens > 0
