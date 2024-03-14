@@ -8,6 +8,7 @@ classdef flexfig < handle
     properties (Access = private)
         IsCtrlKeyDown = false
         IsShiftKeyDown = false
+        IsAltKeyDown = false;
     end
     properties
         MainFigure              matlab.ui.Figure                    % The main figure window
@@ -167,7 +168,7 @@ classdef flexfig < handle
                 hold(ax, 'off');
             end
         end
-        function addAxes(obj, axesName, varargin)
+        function [newAxes, newAxesIdx] = addAxes(obj, axesName, varargin)
             % Add a new resizable axes
             arguments
                 obj flexfig
@@ -194,11 +195,12 @@ classdef flexfig < handle
             newAxesIdx = length(obj.Axes) + 1;
 
             if isempty(copiedAxes)
-                obj.Axes(newAxesIdx) = axes(obj.MainPanel, 'Units', 'normalized', varargin{:});
+                newAxes = axes(obj.MainPanel, 'Units', 'normalized', varargin{:});
             else
                 copiedAxes.Units = 'normalized';
-                obj.Axes(newAxesIdx) = copiedAxes;
+                newAxes = copiedAxes;
             end
+            obj.Axes(newAxesIdx) = newAxes;
             obj.AxesNames{newAxesIdx} = axesName;
             obj.AnchorIconHandles(newAxesIdx) = gobjects();
         end
@@ -447,6 +449,12 @@ classdef flexfig < handle
                         obj.updateAxesGrabPoint(xFig, yFig, clickedAxesIdx, anchorIdx);
                     end
                 end
+            else
+                if obj.IsAltKeyDown
+                    [~, newAxesIdx] = obj.addAxes('axes', 'Position', [xFig, yFig, 0, 0]);
+                    anchorIdx = 7;  % Bottom right anchor
+                    obj.updateAxesGrabPoint(xFig, yFig, newAxesIdx, anchorIdx);
+                end
             end
         end
 
@@ -479,6 +487,9 @@ classdef flexfig < handle
                 ~
                 ~
             end
+            obj.endGrab();
+        end
+        function endGrab(obj)
             obj.GrabAxesIndex = [];
             obj.GrabAnchorIndex = [];
             obj.GrabAxesXControl = [];
@@ -486,7 +497,6 @@ classdef flexfig < handle
             obj.GrabAxesX = [];
             obj.GrabAxesY = [];
         end
-        
         function KeyPressHandler(obj, ~, event)
             % Handle key presses
             arguments
@@ -499,6 +509,14 @@ classdef flexfig < handle
                     obj.IsShiftKeyDown = true;
                 case 'control'
                     obj.IsCtrlKeyDown = true;
+                case 'alt'
+                    obj.IsAltKeyDown = true;
+                case 'escape'
+                    if ~isempty(obj.GrabAxesIndex)
+                        delete(obj.Axes(obj.GrabAxesIndex));
+                        obj.destroyAxes(obj.GrabAxesIndex);
+                        obj.endGrab();
+                    end
             end
         end
         function KeyReleaseHandler(obj, ~, event)
@@ -513,6 +531,8 @@ classdef flexfig < handle
                     obj.IsShiftKeyDown = false;
                 case 'control'
                     obj.IsCtrlKeyDown = false;
+                case 'alt'
+                    obj.IsAltKeyDown = false;
             end
         end
         function set.Axes(obj, newAxes)
