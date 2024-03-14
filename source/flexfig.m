@@ -11,11 +11,8 @@ classdef flexfig < handle
         IsAltKeyDown = false;
     end
     properties
-        MainFigure              matlab.ui.Figure                    % The main figure window
-        MainPanel               matlab.ui.container.Panel           % Panel containing one or more navigation axes
-        Axes                    matlab.graphics.axis.Axes           % List of movable axes
-        AxesNames               cell                                % List of axes names
-        GridSnap                double = 20                         % Size of snap grid in pixels
+        Figure                  matlab.ui.Figure                    % The main figure window
+        GridSize                double = 20                         % Size of snap grid in pixels
         SnapToGrid              logical = false                     % Snap to grid always on?
     end
     properties (Access = private)
@@ -31,7 +28,7 @@ classdef flexfig < handle
         AnchorIconXY            cell =   {}
         AnchorIconHandles       matlab.graphics.Graphics
         AnchorIconScale = 0.05
-        GrabAxesIndex = []
+        GrabAxes = gobjects().empty
         GrabAnchorIndex = []
         GrabAxesXControl = []
         GrabAxesYControl = []
@@ -46,10 +43,22 @@ classdef flexfig < handle
         function obj = flexfig(varargin)
             % flexfig constructor - arguments are passed to figure
 
-            % Create figure
-            obj.MainFigure = figure(varargin{:}, 'Units', 'normalized');
-            % Create panel within figure
-            obj.MainPanel = uipanel('Units', 'normalized', 'Position', [0, 0, 1, 1], 'Parent', obj.MainFigure);
+            [snapToGrid, found, varargin] = flexfig.extractNameValue(varargin, 'SnapToGrid');
+            if found
+                obj.SnapToGrid = snapToGrid;
+            end
+            [gridSize, found, varargin] = flexfig.extractNameValue(varargin, 'GridSize');
+            if found
+                obj.GridSize = gridSize;
+            end
+            [fig, found, varargin] = flexfig.extractNameValue(varargin, 'Figure');
+            if found
+                % Use figure passed in by user
+                obj.Figure = fig;
+            else
+                % Create figure
+                obj.Figure = figure(varargin{:}, 'Units', 'normalized');
+            end
             
             % Assemble full anchor handle shape
             baseCoords = obj.AnchorIconBaseXY;
@@ -68,53 +77,45 @@ classdef flexfig < handle
             end
 
             % Set callbacks and other properties
-            obj.MainFigure.BusyAction = 'queue';
-            obj.MainFigure.KeyPressFcn = @obj.KeyPressHandler;
-            obj.MainFigure.KeyReleaseFcn = @obj.KeyReleaseHandler;
-            obj.MainFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
-            obj.MainFigure.WindowButtonDownFcn = @obj.MouseButtonDownHandler;
-            obj.MainFigure.WindowButtonUpFcn = @obj.MouseButtonUpHandler;
-            obj.MainFigure.CloseRequestFcn = @(varargin)delete(obj);
+            obj.Figure.BusyAction = 'queue';
+            obj.Figure.KeyPressFcn = @obj.KeyPressHandler;
+            obj.Figure.KeyReleaseFcn = @obj.KeyReleaseHandler;
+            obj.Figure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
+            obj.Figure.WindowButtonDownFcn = @obj.MouseButtonDownHandler;
+            obj.Figure.WindowButtonUpFcn = @obj.MouseButtonUpHandler;
+            obj.Figure.CloseRequestFcn = @(varargin)delete(obj);
 
         end
-        function aspectRatio = getAxesBoundaryAspectRatio(obj, axesIdx)
-            % Get the aspect ratio of the given axes
-            arguments
-                obj flexfig
-                axesIdx (1, 1) double
-            end
-            ax = obj.Axes(axesIdx);
-            position = flexfig.getPositionInUnits(ax, 'pixels');
-            aspectRatio = position(3) / position(4);
+        function axesList = getAxesList(obj)
+            axesMask = arrayfun(@(g)isa(g, 'matlab.graphics.axis.Axes'), obj.Figure.Children);
+            axesList = obj.Figure.Children(axesMask);
         end
-        function pixelsPerDataUnit = getPixelsPerDataUnit(obj, axesIdx)
-            % Find the number of pixels per data unit in both x and y
-            % dimensions
+        function axesIdx = getAxesIdx(obj, ax)
             arguments
                 obj flexfig
-                axesIdx (1, 1) double
+                ax (1, 1) matlab.graphics.axis.Axes
             end
-            ax = obj.Axes(axesIdx);
-            position = flexfig.getPositionInUnits(ax, 'pixels');
-            pixelsPerDataUnit = position(3:4) ./ [diff(xlim(ax)), diff(ylim(ax))];
+            axesList = obj.getAxesList();
+            axesIdx = find(ax == axesList, 1);
         end
         function tileAxes(obj, tileSize, margin, snapToGrid)
             % Arrange axes in a tiled pattern
             arguments
                 obj flexfig
                 tileSize (1, 2) double                  % 2-vector containing the x and y size of the desired axes grid
-                margin (1, 1) double = obj.GridSnap;    % Size in pixels of the margin between axes
+                margin (1, 1) double = obj.GridSize;    % Size in pixels of the margin between axes
                 snapToGrid (1, 1) logical = true        % Snap the tiled positions to the grid? If true, for best results, margin should be a multiple of obj.GridSnap
             end
             % Create tile coordinates
             [xTiles, yTiles] = ndgrid(1:tileSize(1), 1:tileSize(2));
 
             % Calculate size of axes
-            obj.MainFigure.Units = 'pixels';
-            effectiveFigureSize = obj.MainFigure.Position(3:4) - margin * (tileSize + 1);
+            obj.Figure.Units = 'pixels';
+            effectiveFigureSize = obj.Figure.Position(3:4) - margin * (tileSize + 1);
             axesSize = effectiveFigureSize ./ tileSize;
 
-            numAxes = length(obj.Axes);
+            axesList = obj.getAxesList();
+            numAxes = length(axesList);
             for axesIdx = 1:numAxes
                 if axesIdx > numel(xTiles)
                     % Ran out of spaces in tiling
@@ -123,35 +124,34 @@ classdef flexfig < handle
 
                 % Determine coordinates of each axes according to the grid
                 % size
-                obj.Axes(axesIdx).Units = 'pixels';
+                axesList(axesIdx).Units = 'pixels';
                 x = (xTiles(axesIdx) - 1) * axesSize(1) + xTiles(axesIdx) * margin;
                 y = yTiles(axesIdx) * axesSize(2) + yTiles(axesIdx) * margin;
-                y = obj.MainFigure.Position(4) - y;
+                y = obj.Figure.Position(4) - y;
                 tiledPosition = [x, y, axesSize];
                 if snapToGrid
                     [tiledPosition([1, 3]), tiledPosition([2, 4])] = snapFigCoords(obj, tiledPosition([1, 3]), tiledPosition([2, 4]));
                 end
 
                 % Set axes position
-                obj.Axes(axesIdx).Position = tiledPosition;
-                obj.Axes(axesIdx).Units = 'normalized';
+                axesList(axesIdx).Position = tiledPosition;
+                axesList(axesIdx).Units = 'normalized';
             end
-            obj.MainFigure.Units = 'normalized';
+            obj.Figure.Units = 'normalized';
         end
-        function anchorHandle = drawAnchor(obj, axesIdx, anchorIdx)
+        function anchorHandle = drawAnchor(obj, ax, anchorIdx)
             % Draw an anchor handle to indicate a draggable point
             arguments
                 obj flexfig
-                axesIdx (1, 1) double
+                ax (1, 1) matlab.graphics.axis.Axes
                 anchorIdx (1, 1) double
             end
-            ax = obj.Axes(axesIdx);
             holdState = ishold(ax);
             ax.XLimMode = 'manual';
             ax.YLimMode = 'manual';
             hold(ax, 'on');
 
-            pixelsPerDataUnit = getPixelsPerDataUnit(obj, axesIdx);
+            pixelsPerDataUnit = flexfig.getPixelsPerDataUnit(ax);
             x = obj.AnchorIconXY{anchorIdx}(1, :);
             y = obj.AnchorIconXY{anchorIdx}(2, :);
             sizeAdjustment = 0.8;
@@ -168,117 +168,6 @@ classdef flexfig < handle
                 hold(ax, 'off');
             end
         end
-        function [newAxes, newAxesIdx] = addAxes(obj, axesName, varargin)
-            % Add a new resizable axes
-            arguments
-                obj flexfig
-                axesName char = obj.getUniqueAxesName('axes');
-            end
-            arguments (Repeating)
-                varargin            % Pass in extra arguments to axes constructor
-            end
-
-            % Don't let user change axes units
-            unitsArgumentPosition = find(strcmp('Units', varargin));
-            if ~isempty(unitsArgumentPosition)
-                varargin(unitsArgumentPosition:unitsArgumentPosition+1) = [];
-            end
-            sourceAxesArgumentPosition = find(strcmp('SourceAxes', varargin));
-            if ~isempty(sourceAxesArgumentPosition)
-                sourceAxes = varargin{sourceAxesArgumentPosition+1};
-                copiedAxes = copyobj(sourceAxes, obj.MainPanel);
-                varargin(sourceAxesArgumentPosition:sourceAxesArgumentPosition+1) = [];
-            else
-                copiedAxes = gobjects().empty;
-            end
-
-            newAxesIdx = length(obj.Axes) + 1;
-
-            if isempty(copiedAxes)
-                newAxes = axes(obj.MainPanel, 'Units', 'normalized', varargin{:});
-            else
-                copiedAxes.Units = 'normalized';
-                newAxes = copiedAxes;
-            end
-            obj.Axes(newAxesIdx) = newAxes;
-            obj.AxesNames{newAxesIdx} = axesName;
-            obj.AnchorIconHandles(newAxesIdx) = gobjects();
-        end
-        function axesName = getUniqueAxesName(obj, startingAxesName)
-            % Get a unique name for the given starting name, to ensure no
-            % two axes have the same name
-            arguments
-                obj flexfig
-                startingAxesName (1, :) char
-            end
-            trailingNumberIndices = regexp(startingAxesName, '([0-9]+)$', 'tokenExtents');
-            if ~isempty(trailingNumberIndices)
-                startNumeral = str2double(startingAxesName(trailingNumberIndices(1):trailingNumberIndices(2)));
-                startingAxesName(trailingNumberIndices(1):trailingNumberIndices(2)) = [];
-            else
-                startNumeral = 1;
-            end
-            numeral = startNumeral;
-            while true
-                axesName = sprintf('%s_%03d', startingAxesName, numeral);
-                if ~any(strcmp(axesName, obj.AxesNames))
-                    break;
-                end
-                numeral = numeral + 1;
-            end            
-        end
-        function ax = getElementAxes(obj, axesIdxOrName)
-            % Get the handle to an axes based on an index or name
-            arguments
-                obj flexfig
-                axesIdxOrName       % Either an axes index or an axes name
-            end
-            if ischar(axesIdxOrName)
-                axesIndex = obj.getAxesIndexFromName(axesIdxOrName);
-            else
-                axesIndex = axesIdxOrName;
-            end
-
-            ax = obj.Axes(axesIndex);
-        end
-        function axesIndex = getAxesIndexFromName(obj, axesName)
-            % Find the axes index based on the axes name
-            arguments
-                obj flexfig
-                axesName (1, :) char
-            end
-            axesIndex = find(strcmp(obj.AxesNames, axesName), 1);
-        end
-        function destroyAxes(obj, axesIdxOrName)
-            % Delete one of the axes based on its index or name
-            arguments
-                obj flexfig
-                axesIdxOrName
-            end
-            if ischar(axesIdxOrName)
-                axesIndex = obj.getAxesIndexFromName(axesIdxOrName);
-            else
-                axesIndex = axesIdxOrName;
-            end
-
-            delete(obj.Axes(axesIndex));
-            obj.Axes(axesIndex) = [];
-            obj.AxesNames(axesIndex) = [];
-        end
-        function [xAx, yAx] = mapFigureToAxesCoordinates(obj, axesIdx, xFig, yFig)
-            % Transform figure coordinates to axes coordinates for the
-            % specified axes index
-            arguments
-                obj flexfig
-                axesIdx (1, 1) double
-                xFig (1, :) double
-                yFig (1, :) double
-            end
-            ax = obj.Axes(axesIdx);
-            axesPosition = getWidgetFigurePosition(ax, 'normalized');
-            xAx = (xFig - axesPosition(1)) / axesPosition(3);
-            yAx = (yFig - axesPosition(2)) / axesPosition(4);
-        end
         function [xAx, yAx, inAxes] = getAxesPositions(obj, xFig, yFig, firstInside)
             % Transform the given figure coordinates to the axes
             % coordinates for one or more of the axes. If firstInside is
@@ -290,7 +179,8 @@ classdef flexfig < handle
                 yFig (1, 1) double
                 firstInside (1, 1) logical = false
             end
-            numAxes = length(obj.Axes);
+            axesList = obj.getAxesList();
+            numAxes = length(axesList);
 
             if ~firstInside
                 % Append all axes-based positions and inside boolean
@@ -306,7 +196,7 @@ classdef flexfig < handle
             end
 
             for axesIdx = numAxes:-1:1
-                [thisXAx, thisYAx] = obj.mapFigureToAxesCoordinates(axesIdx, xFig, yFig);
+                [thisXAx, thisYAx] = flexfig.mapFigureToAxesCoordinates(axesList(axesIdx), xFig, yFig);
                 thisInAxes = thisXAx >= 0 && thisXAx <= 1 && thisYAx >= 0 && thisYAx <= 1;
                 if firstInside
                     if thisInAxes
@@ -325,16 +215,15 @@ classdef flexfig < handle
 
             end
         end
-        function anchorIdx = getAnchorInRange(obj, axesIdx, xAx, yAx)
+        function anchorIdx = getAnchorInRange(obj, ax, xAx, yAx)
             % Get the anchor index of the first anchor found in range of
             % the given coordinates for the given axes
             arguments
                 obj flexfig
-                axesIdx (1, 1) double
+                ax (1, 1) matlab.graphics.axis.Axes
                 xAx (1, 1) double
                 yAx (1, 1) double
             end
-            ax = obj.Axes(axesIdx);
             axPosition = flexfig.getPositionInUnits(ax, 'pixels');
             xAxPix = axPosition(1) + xAx * axPosition(3);
             yAxPix = axPosition(2) + yAx * axPosition(4);
@@ -362,8 +251,10 @@ classdef flexfig < handle
             [xFig, yFig] = obj.getFigureCoordinates();
             [xAx, yAx, inAxes] = obj.getAxesPositions(xFig, yFig);
 
-            if ~isempty(obj.GrabAxesIndex)
-                ax = obj.Axes(obj.GrabAxesIndex);
+            axesList = obj.getAxesList();
+
+            if ~isempty(obj.GrabAxes)
+                ax = obj.GrabAxes;
                 axXCoords = [ax.Position(1), ax.Position(1) + ax.Position(3)];
                 axYCoords = [ax.Position(2), ax.Position(2) + ax.Position(4)];
                 startXCoords = [obj.GrabAxesStartPosition(1), obj.GrabAxesStartPosition(1) + obj.GrabAxesStartPosition(3)];
@@ -384,26 +275,29 @@ classdef flexfig < handle
                 end
                 
                 ax.Position = [axXCoords(1), axYCoords(1), abs(diff(axXCoords)), abs(diff(axYCoords))];
+            else
+                for axesIdx = 1:length(axesList)
+                    axesList(axesIdx).XLimMode = 'manual';
+                    axesList(axesIdx).YLimMode = 'manual';
+                end
             end
 
+            for axesIdx = 1:length(axesList)
+                if length(obj.AnchorIconHandles) < axesIdx
+                    break;
+                end
+                delete(obj.AnchorIconHandles(axesIdx));
+            end
             for axesIdx = find(inAxes)
                 % Loop over any axes we are inside
                 if obj.IsCtrlKeyDown
-                    anchorIdxInRange = obj.getAnchorInRange(axesIdx, xAx(axesIdx), yAx(axesIdx));
+                    anchorIdxInRange = obj.getAnchorInRange(axesList(axesIdx), xAx(axesIdx), yAx(axesIdx));
                     if ~isempty(anchorIdxInRange)
-                        delete(obj.AnchorIconHandles(axesIdx));
                         if obj.AnchorVisible(anchorIdxInRange)
-                            obj.AnchorIconHandles(axesIdx) = obj.drawAnchor(axesIdx, anchorIdxInRange);
+                            obj.AnchorIconHandles(axesIdx) = obj.drawAnchor(axesList(axesIdx), anchorIdxInRange);
                         end
-                    else
-                        delete(obj.AnchorIconHandles(axesIdx));
                     end
-                else
-                    delete(obj.AnchorIconHandles(axesIdx));
                 end
-            end
-            for axesIdx = find(~inAxes)
-                delete(obj.AnchorIconHandles(axesIdx));
             end
         end
         function [xFig, yFig] = getFigureCoordinates(obj)
@@ -411,10 +305,13 @@ classdef flexfig < handle
             arguments
                 obj flexfig
             end
-            xFig = obj.MainFigure.CurrentPoint(1, 1);
-            yFig = obj.MainFigure.CurrentPoint(1, 2);
+            originalUnits = obj.Figure.Units;
+            obj.Figure.Units = 'normalized';
+            xFig = obj.Figure.CurrentPoint(1, 1);
+            yFig = obj.Figure.CurrentPoint(1, 2);
+            obj.Figure.Units = originalUnits;
+
         end
-        
         function [xSnap, ySnap] = snapFigCoords(obj, xFig, yFig)
             % Snap the given figure coordinates to the nearest grid point
             arguments
@@ -422,11 +319,11 @@ classdef flexfig < handle
                 xFig (:, :) double
                 yFig (:, :) double
             end
-            position = flexfig.getPositionInUnits(obj.MainFigure, 'pixels');
+            position = flexfig.getPositionInUnits(obj.Figure, 'pixels');
             w = position(3);
             h = position(4);
-            xSnap = round(xFig*w / obj.GridSnap) * obj.GridSnap / w;
-            ySnap = round(yFig*h / obj.GridSnap) * obj.GridSnap / h;
+            xSnap = round(xFig*w / obj.GridSize) * obj.GridSize / w;
+            ySnap = round(yFig*h / obj.GridSize) * obj.GridSize / h;
         end
 
         function MouseButtonDownHandler(obj, ~, ~)
@@ -438,44 +335,50 @@ classdef flexfig < handle
             end
             [xFig, yFig] = obj.getFigureCoordinates();
             
+            axesList = obj.getAxesList();
+
             if obj.IsCtrlKeyDown
                 [xAx, yAx, axesIdx] = obj.getAxesPositions(xFig, yFig, true);
                 if axesIdx
                     % User clicked inside one of the axes
-                    clickedAxesIdx = axesIdx;
-                    anchorIdx = obj.getAnchorInRange(clickedAxesIdx, xAx, yAx);
+                    clickedAxes = axesList(axesIdx);
+                    anchorIdx = obj.getAnchorInRange(clickedAxes, xAx, yAx);
                     if ~isempty(anchorIdx)
                         % User clicked in range of the axes' grab anchors
-                        obj.updateAxesGrabPoint(xFig, yFig, clickedAxesIdx, anchorIdx);
+                        obj.updateAxesGrabPoint(xFig, yFig, clickedAxes, anchorIdx);
                     end
                 end
             else
                 if obj.IsAltKeyDown
-                    [~, newAxesIdx] = obj.addAxes('axes', 'Position', [xFig, yFig, 0, 0]);
+                    ax = axes('Position', [xFig, yFig, 0, 0], 'Parent', obj.Figure);
                     anchorIdx = 7;  % Bottom right anchor
-                    obj.updateAxesGrabPoint(xFig, yFig, newAxesIdx, anchorIdx);
+                    obj.updateAxesGrabPoint(xFig, yFig, ax, anchorIdx);
                 end
             end
         end
 
-        function updateAxesGrabPoint(obj, xFig, yFig, axesIdx, anchorIdx)
+        function updateAxesGrabPoint(obj, xFig, yFig, ax, anchorIdx)
             arguments
                 obj flexfig
                 xFig (1, :) double
                 yFig (1, :) double
-                axesIdx double = obj.GrabAxesIndex
+                ax (1, 1) matlab.graphics.axis.Axes = obj.GrabAxes
                 anchorIdx double = []
             end
-            if ~isempty(axesIdx)
-                obj.GrabAxesIndex = axesIdx;
+            if ~isempty(ax)
+                obj.GrabAxes = ax;
+                obj.Figure.CurrentAxes = ax;
+                % Rearrange figure Children to put the grabbed axes on top
+                grabAxesIdx = obj.getAxesIdx(ax);
+                obj.Figure.Children([1, grabAxesIdx]) = obj.Figure.Children([grabAxesIdx, 1]);
             end
             if ~isempty(anchorIdx)
                 obj.GrabAnchorIndex = anchorIdx;
                 obj.GrabAxesXControl = obj.AnchorXControl{anchorIdx};
                 obj.GrabAxesYControl = obj.AnchorYControl{anchorIdx};
             end
-            if ~isempty(axesIdx)
-                obj.GrabAxesStartPosition = obj.Axes(axesIdx).Position;
+            if ~isempty(ax)
+                obj.GrabAxesStartPosition = ax.Position;
                 obj.GrabAxesX = xFig;
                 obj.GrabAxesY = yFig;
             end
@@ -490,7 +393,7 @@ classdef flexfig < handle
             obj.endGrab();
         end
         function endGrab(obj)
-            obj.GrabAxesIndex = [];
+            obj.GrabAxes = gobjects().empty;
             obj.GrabAnchorIndex = [];
             obj.GrabAxesXControl = [];
             obj.GrabAxesYControl = [];
@@ -512,9 +415,8 @@ classdef flexfig < handle
                 case 'alt'
                     obj.IsAltKeyDown = true;
                 case 'escape'
-                    if ~isempty(obj.GrabAxesIndex)
-                        delete(obj.Axes(obj.GrabAxesIndex));
-                        obj.destroyAxes(obj.GrabAxesIndex);
+                    if ~isempty(obj.GrabAxes)
+                        delete(obj.GrabAxes);
                         obj.endGrab();
                     end
             end
@@ -535,22 +437,23 @@ classdef flexfig < handle
                     obj.IsAltKeyDown = false;
             end
         end
-        function set.Axes(obj, newAxes)
-            % Handle user settings obj.Axes (ensure axes units are
-            % normalized)
-            for k = 1:length(newAxes)
-                if ~strcmp('normalized', newAxes(k).Units)
-                    newAxes(k).Units = 'normalized';
-                    warning('Axes Units property must remain ''normalized''');
-                end
-            end
-            obj.Axes = newAxes;
-        end
         function delete(obj)
-            delete(obj.MainFigure);
+            delete(obj.Figure);
         end
     end
     methods (Static)
+        function [xAx, yAx] = mapFigureToAxesCoordinates(ax, xFig, yFig)
+            % Transform figure coordinates to axes coordinates for the
+            % specified axes index
+            arguments
+                ax (1, 1) matlab.graphics.axis.Axes
+                xFig (1, :) double
+                yFig (1, :) double
+            end
+            axesPosition = getWidgetFigurePosition(ax, 'normalized');
+            xAx = (xFig - axesPosition(1)) / axesPosition(3);
+            yAx = (yFig - axesPosition(2)) / axesPosition(4);
+        end
         function position = getPositionInUnits(widget, units)
             arguments
                 widget matlab.graphics.Graphics
@@ -560,6 +463,34 @@ classdef flexfig < handle
             widget.Units = units;
             position = widget.Position;
             widget.Units = originalUnits;
+        end
+        function aspectRatio = getAxesBoundaryAspectRatio(ax)
+            % Get the aspect ratio of the given axes
+            arguments
+                ax (1, 1) matlab.graphics.axis.Axes
+            end
+            position = flexfig.getPositionInUnits(ax, 'pixels');
+            aspectRatio = position(3) / position(4);
+        end
+        function pixelsPerDataUnit = getPixelsPerDataUnit(ax)
+            % Find the number of pixels per data unit in both x and y
+            % dimensions
+            arguments
+                ax (1, 1) matlab.graphics.axis.Axes
+            end
+            position = flexfig.getPositionInUnits(ax, 'pixels');
+            pixelsPerDataUnit = position(3:4) ./ [diff(xlim(ax)), diff(ylim(ax))];
+        end
+        function [value, found, args] = extractNameValue(args, name)
+            idx = find(strcmp(name, args), 1);
+            if isempty(idx)
+                value = [];
+                found = false;
+            else
+                value = args{idx+1};
+                found = true;
+                args(idx:idx+1) = [];
+            end
         end
     end
 end
