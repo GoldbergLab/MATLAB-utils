@@ -45,7 +45,7 @@ function [filePaths, varargout] = findFilesByRegex(rootDirOrTree, regex, matchPa
 %        'C:\Users\Username\...\test4.txt',
 %        'C:\Users\Username\...\test7.txt'}
 %
-%     fileNms = 
+%     fileNums = 
 %       {'1', '4', '7'}
 %
 % See also: dir, buildFileTree
