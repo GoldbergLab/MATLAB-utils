@@ -43,22 +43,27 @@ classdef flexfig < handle
     methods
         function obj = flexfig(varargin)
             % flexfig constructor - arguments are passed to figure
-
+            if isa(varargin{1}, 'matlab.ui.Figure')
+                obj.Figure = varargin{1};
+                varargin{1} = [];
+            end
             [snapToGrid, found, varargin] = flexfig.extractNameValue(varargin, 'SnapToGrid');
             if found
                 obj.SnapToGrid = snapToGrid;
             end
             [gridSize, found, varargin] = flexfig.extractNameValue(varargin, 'GridSize');
-            if found
-                obj.GridSize = gridSize;
-            end
-            [fig, found, varargin] = flexfig.extractNameValue(varargin, 'Figure');
-            if found
-                % Use figure passed in by user
-                obj.Figure = fig;
-            else
-                % Create figure
-                obj.Figure = figure(varargin{:}, 'Units', 'normalized');
+            if isempty(obj.Figure)
+                if found
+                    obj.GridSize = gridSize;
+                end
+                [fig, found, varargin] = flexfig.extractNameValue(varargin, 'Figure');
+                if found
+                    % Use figure passed in by user
+                    obj.Figure = fig;
+                else
+                    % Create figure
+                    obj.Figure = figure(varargin{:}, 'Units', 'normalized');
+                end
             end
             
             % Assemble full anchor handle shape
@@ -158,6 +163,9 @@ classdef flexfig < handle
                 fclose(fileID);
                 edit(filename);
             end
+        end
+        function delete(obj)
+            delete(obj.Figure);
         end
     end
     methods (Access = protected)
@@ -497,9 +505,6 @@ classdef flexfig < handle
                 case 'alt'
                     obj.IsAltKeyDown = false;
             end
-        end
-        function delete(obj)
-            delete(obj.Figure);
         end
     end
     methods (Static, Access = protected)
