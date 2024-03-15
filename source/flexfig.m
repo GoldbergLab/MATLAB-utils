@@ -43,7 +43,7 @@ classdef flexfig < handle
     methods
         function obj = flexfig(varargin)
             % flexfig constructor - arguments are passed to figure
-            if isa(varargin{1}, 'matlab.ui.Figure')
+            if ~isempty(varargin) && isa(varargin{1}, 'matlab.ui.Figure')
                 obj.Figure = varargin{1};
                 varargin{1} = [];
             end
