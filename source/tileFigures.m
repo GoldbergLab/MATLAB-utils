@@ -33,10 +33,12 @@ panels = gobjects().empty;
 % Loop over each input figure
 for k = 1:length(figureList)
     fig = figureList(k);
+    fig.Units = 'normalized';
     % Create a panel to accept the contents of this figure
     panels(k) = uipanel('Parent', tiledFig, 'BorderType', 'none');
+    panels(k).Position = [panels(k).Position(1:2), fig.Position(3:4)];
     % Copy the children of the figure onto the panel
     copyobj(fig.Children, panels(k));
 end
 % Tile the panels into the desired grid
-tileChildren(tiledFig, tileSize, margin);
+tileChildren(tiledFig, tileSize, margin, true);
