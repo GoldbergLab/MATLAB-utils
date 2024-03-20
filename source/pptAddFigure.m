@@ -44,9 +44,16 @@ if ischar(presentationOrPath)
         error('Given file is not a valid powerpoint presentation: %s', presentationPath);
     end
 else
-    % User passed in ppt object
+    % User passed in ppt presentation object
     presentation = presentationOrPath;
     presentationPath = '';
+    try
+        presentation.Name;
+    catch
+        warning('Presentation appears to be invalid');
+        ppt = actxserver('PowerPoint.Application');
+        presentation = ppt.Presentations.Add();
+    end
 end
 
 % Get blank slide template
