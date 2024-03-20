@@ -1,4 +1,4 @@
-function presentation = pptAddFigure(presentationOrPath, fig, slideNum)
+function [presentation, slide] = pptAddFigure(presentationOrPath, fig, slideNum)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % pptAddFigure: Add a figure to a new or existing presentation
 % usage: presentation = pptAddFigure(presentationOrPath)
