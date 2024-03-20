@@ -29,10 +29,26 @@ function tileChildren(parent, tileSize, margin, preserveAspectRatio)
         childPositions = vertcat(parent.Children.Position);
         % Adjust figure size
         for row = 1:tileSize(2)
-            rowHeights(row) = max(childPositions(yTiles==row, 4));
+            childIdx = yTiles==row;
+            childIdx(numChildren+1:end) = false;
+            firstChildInRow = find(childIdx, 1, 'first');
+            if  isempty(firstChildInRow) || firstChildInRow > numChildren
+                % Not enough children to fill this row
+                rowHeights(row) = 0;
+            else
+                rowHeights(row) = max(childPositions(childIdx, 4));
+            end
         end
         for column = 1:tileSize(1)
-            columnWidths(column) = max(childPositions(xTiles==column, 3));
+            childIdx = xTiles==column;
+            childIdx(numChildren+1:end) = false;
+            firstChildInColumn = find(childIdx, 1, 'first');
+            if  isempty(firstChildInColumn) || firstChildInColumn > numChildren
+                % Not enough children to fill this column
+                columnWidths(column) = 0;
+            else
+                columnWidths(column) = max(childPositions(childIdx, 3));
+            end
         end
         overallAspectRatio = sum(rowHeights)/sum(columnWidths);
         parent.Position(4) = parent.Position(3) * overallAspectRatio;
