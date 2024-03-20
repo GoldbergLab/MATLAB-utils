@@ -10,8 +10,8 @@ function tiledFig = tileFigures(figureList, tileSize, margin, tightenFactor, rem
 %    margin is the size in pixels of the margin between widgets
 %    tightenFactor is a 1x2 array of tightening factors for making the
 %       elements in each figure fit more tightly in the grid. For example, 
-%       [0.06, 0.03] (the default) removes 8% of the space to the left and
-%       right, and 5% of the space on top and bottom of each tile.
+%       [0.06, 0.03] removes 8% of the space to the left and right, and 5% 
+%       of the space on top and bottom of each tile. Default is [0, 0].
 %    removePanels is an optional logical indicating whether or not to
 %       remove the uipanels containing each figure's transferred contents.
 %       If the resulting figure will be exported, this should be set to
@@ -33,7 +33,7 @@ arguments
     figureList matlab.ui.Figure     % List of figures to tile
     tileSize (1, 2) double          % 2-vector containing the x and y size of the desired axes grid
     margin (1, 1) double = 10;      % Size in pixels of the margin between widgets
-    tightenFactor (1, 2) double = [0.06, 0.03]  % Fraction of space to remove from horizontal and vertical margins to tighten positioning of elements in grid
+    tightenFactor (1, 2) double = [0, 0]  % Fraction of space to remove from horizontal and vertical margins to tighten positioning of elements in grid
     removePanels (1, 1) logical = true
 end
 
