@@ -24,9 +24,9 @@ function tileChildren(parent, tileSize, margin, preserveAspectRatio)
     end
 
     if preserveAspectRatio
-        rowHeights = zeros(1, tileSize(1));
-        columnWidths = zeros(1, tileSize(2));
-        childPositions = vertcat(parent.Children.Position);
+        rowHeights = zeros(1, tileSize(2));
+        columnWidths = zeros(1, tileSize(1));
+        childPositions = vertcat(parent.Children.OuterPosition);
         % Adjust figure size
         for row = 1:tileSize(2)
             childIdx = yTiles==row;
@@ -52,6 +52,8 @@ function tileChildren(parent, tileSize, margin, preserveAspectRatio)
             end
         end
         columnWidths(columnWidths == 0) = mean(columnWidths(columnWidths > 0));
+        sum(rowHeights)
+        sum(columnWidths)
         overallAspectRatio = sum(rowHeights)/sum(columnWidths);
         parent.Position(4) = parent.Position(3) * overallAspectRatio;
     end
@@ -75,7 +77,7 @@ function tileChildren(parent, tileSize, margin, preserveAspectRatio)
         % Flip y position so tiling starts at top
         y = parent.Position(4) - y;
         if preserveAspectRatio
-            [newChildWidth, newChileHeight] = fitContainer(child.Position(3), child.Position(4), tileDims(1), tileDims(2));
+            [newChildWidth, newChileHeight] = fitContainer(child.OuterPosition(3), child.OuterPosition(4), tileDims(1), tileDims(2));
             newChildSize = [newChildWidth, newChileHeight];
         else
             newChildSize = tileDims;
@@ -84,7 +86,7 @@ function tileChildren(parent, tileSize, margin, preserveAspectRatio)
         tiledPosition = [x, y, newChildSize];
 
         % Set child position
-        child.Position = tiledPosition;
+        child.OuterPosition = tiledPosition;
     end
     parent.Units = originalParentUnits;
 

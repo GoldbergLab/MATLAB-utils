@@ -44,10 +44,10 @@ panels = gobjects().empty;
 % Loop over each input figure
 for k = 1:length(figureList)
     fig = figureList(k);
-    fig.Units = 'normalized';
+    figPosition = getUIPositionInUnits(fig, 'pixels');
     % Create a panel to accept the contents of this figure
-    panels(k) = uipanel('Parent', tiledFig, 'BorderType', 'none');
-    panels(k).Position = [panels(k).Position(1:2), fig.Position(3:4)];
+    panels(k) = uipanel('Parent', tiledFig, 'BorderType', 'none', 'Units', 'pixels');
+    panels(k).Position = [panels(k).Position(1:2), figPosition(3:4)];
     % Copy the children of the figure onto the panel
     copyobj(fig.Children, panels(k));
 end
