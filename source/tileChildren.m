@@ -39,6 +39,7 @@ function tileChildren(parent, tileSize, margin, preserveAspectRatio)
                 rowHeights(row) = max(childPositions(childIdx, 4));
             end
         end
+        rowHeights(rowHeights == 0) = mean(rowHeights(rowHeights > 0));
         for column = 1:tileSize(1)
             childIdx = xTiles==column;
             childIdx(numChildren+1:end) = false;
@@ -50,6 +51,7 @@ function tileChildren(parent, tileSize, margin, preserveAspectRatio)
                 columnWidths(column) = max(childPositions(childIdx, 3));
             end
         end
+        columnWidths(columnWidths == 0) = mean(columnWidths(columnWidths > 0));
         overallAspectRatio = sum(rowHeights)/sum(columnWidths);
         parent.Position(4) = parent.Position(3) * overallAspectRatio;
     end
