@@ -1,5 +1,8 @@
 classdef CLimGUI < handle
     properties
+        CLim                        (1, 2) double
+    end
+    properties (Access = protected)
         ParentFigure                matlab.ui.Figure
         Image                       matlab.graphics.primitive.Image
         ImageAxes                   matlab.graphics.axis.Axes
@@ -15,7 +18,11 @@ classdef CLimGUI < handle
         IsSelectingCLim             logical
     end
     methods
-        function obj = CLimGUI(imageOrAxes, increment, parent_figure)
+        function obj = CLimGUI(imageOrAxes, parent_figure)
+            arguments
+                imageOrAxes matlab.graphics.Graphics
+                parent_figure matlab.ui.Figure = matlab.ui.Figure.empty()
+            end
             switch class(imageOrAxes)
                 case 'matlab.graphics.primitive.Image'
                     obj.Image = imageOrAxes;
@@ -33,9 +40,6 @@ classdef CLimGUI < handle
                     error('imageOrAxes should either be a handle for an image or axes')
             end
 
-            if ~exist('increment', 'var') || isempty(increment)
-                increment = 0.5;
-            end
             if ~exist('parent_figure', 'var') || isempty(parent_figure)
                 ax_position = getWidgetScreenPosition(obj.ImageAxes, 'pixels');
                 GUI_width = 150;
@@ -50,7 +54,7 @@ classdef CLimGUI < handle
             obj.ParentFigure.WindowButtonUpFcn = @obj.MouseUpHandler;
             obj.ParentFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
             
-            obj.CLimIncrement = increment;
+            obj.CLimIncrement = 0.5;
             obj.ControlPanel = uipanel("Parent", obj.ParentFigure);
             obj.LowerBoundIncreaseButton = uicontrol("Parent", obj.ControlPanel, "Style", "pushbutton", "String", "↑", "Units", "normalized", "Position", [0.000, 0.500, 0.250, 0.500], "Callback", @(~, ~)obj.AlterCLim(1,  obj.CLimIncrement));
             obj.LowerBoundDecreaseButton = uicontrol("Parent", obj.ControlPanel, "Style", "pushbutton", "String", "↓", "Units", "normalized", "Position", [0.000, 0.000, 0.250, 0.500], "Callback", @(~, ~)obj.AlterCLim(1, -obj.CLimIncrement));
@@ -80,6 +84,10 @@ classdef CLimGUI < handle
             obj.SanitizeCLim();
             obj.CLimChangeHandler();
         end
+        function clim = GetCLim(obj)
+            obj.SanitizeCLim();
+            clim = [str2double(obj.BoundEntries(1).String), str2double(obj.BoundEntries(2).String)];
+        end
         function SanitizeCLim(obj)
             if str2double(obj.BoundEntries(1).String) >= str2double(obj.BoundEntries(2).String)
                 obj.BoundEntries(2).String = num2str(str2double(obj.BoundEntries(1).String) + obj.CLimIncrement);
@@ -90,6 +98,7 @@ classdef CLimGUI < handle
             if ~isempty(obj.Image)
                 histogram(obj.HistogramAxes, obj.Image.CData(:));
             end
+            obj.CLimIncrement = diff(xlim(obj.HistogramAxes))/20;
         end
         function UpdateHistogramHighlight(obj)
             delete(obj.HistogramHighlight);
@@ -107,6 +116,7 @@ classdef CLimGUI < handle
             obj.BoundEntries(2).String = num2str(obj.ImageAxes.CLim(2));
         end
         function CLimChangeHandler(obj)
+            obj.CLim = [str2double(obj.BoundEntries(1).String), str2double(obj.BoundEntries(2).String)];
             obj.UpdateHistogram();
             obj.UpdateHistogramHighlight();
             obj.ApplyCLimToAxes();
