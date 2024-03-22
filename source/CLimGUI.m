@@ -54,6 +54,7 @@ classdef CLimGUI < handle
             obj.ParentFigure.WindowButtonDownFcn = @obj.MouseDownHandler;
             obj.ParentFigure.WindowButtonUpFcn = @obj.MouseUpHandler;
             obj.ParentFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
+            obj.ParentFigure.WindowKeyPressFcn = @obj.KeyPressHandler;
             
             obj.CLimIncrement = 0.5;
             obj.ControlPanel = uipanel("Parent", obj.ParentFigure);
@@ -166,14 +167,6 @@ classdef CLimGUI < handle
                     else
                         obj.SetCLim(2, colorVal);
                     end
-%                     switch obj.ParentFigure.SelectionType
-%                         case 'alt'
-%                             % Right click
-%                             obj.SetCLim(2, colorVal);
-%                         otherwise
-%                             % Left click
-%                             obj.SetCLim(1, colorVal);
-%                     end
                 end
             end
 
@@ -195,19 +188,21 @@ classdef CLimGUI < handle
                 else
                     obj.SetCLim(2, colorVal);
                 end
-%                 switch obj.ParentFigure.SelectionType
-%                     case 'alt'
-%                         % Right click
-%                         obj.SetCLim(2, colorVal);
-%                     otherwise
-%                         % Left click
-%                         obj.SetCLim(1, colorVal);
-%                 end
             end
             obj.CLimChangeHandler();
         end
         function MouseUpHandler(obj, ~, ~)
             obj.IsSelectingCLim = false;
+        end
+        function KeyPressHandler(obj, ~, event)
+            if any(strcmp(event.Modifier, 'control'))
+                % User is pressing control
+                switch event.Key
+                    case 'c'
+                    % Copy clim to clipboard
+                    clipboard('copy', sprintf('[%s, %s]', obj.BoundEntries(1).String, obj.BoundEntries(2).String));
+                end
+            end
         end
     end
 end
