@@ -1,9 +1,9 @@
 classdef CLimGUI < handle
     properties
         CLim                        (1, 2) double
+        ParentFigure                matlab.ui.Figure
     end
     properties (Access = protected)
-        ParentFigure                matlab.ui.Figure
         Image                       matlab.graphics.primitive.Image
         ImageAxes                   matlab.graphics.axis.Axes
         HistogramAxes               matlab.graphics.axis.Axes
@@ -16,6 +16,7 @@ classdef CLimGUI < handle
         UpperBoundDecreaseButton    matlab.ui.control.UIControl
         BoundEntries                matlab.ui.control.UIControl
         IsSelectingCLim             logical
+        BoundsToText                function_handle = @(bound)sprintf('%.03f', bound)
     end
     methods
         function obj = CLimGUI(imageOrAxes, parent_figure)
@@ -42,7 +43,7 @@ classdef CLimGUI < handle
 
             if ~exist('parent_figure', 'var') || isempty(parent_figure)
                 ax_position = getWidgetScreenPosition(obj.ImageAxes, 'pixels');
-                GUI_width = 150;
+                GUI_width = 175;
                 GUI_height = 100;
                 fig_position = [ax_position(1) + ax_position(3) - GUI_width, ax_position(2) + ax_position(4), GUI_width, GUI_height];
                 obj.ParentFigure = figure("Units", "pixels", "Position", fig_position, "MenuBar", "none", "DockControls", "off", "ToolBar", "none", "Name", "CLim GUI", "NumberTitle", "off");
@@ -75,12 +76,12 @@ classdef CLimGUI < handle
             obj.UpdateHistogramHighlight();
         end
         function AlterCLim(obj, bound, amount)
-            obj.BoundEntries(bound).String = num2str(str2double(obj.BoundEntries(bound).String) + amount);
+            obj.BoundEntries(bound).String = obj.BoundsToText(str2double(obj.BoundEntries(bound).String) + amount);
             obj.SanitizeCLim();
             obj.CLimChangeHandler();
         end
         function SetCLim(obj, bound, value)
-            obj.BoundEntries(bound).String = num2str(value);
+            obj.BoundEntries(bound).String = obj.BoundsToText(value);
             obj.SanitizeCLim();
             obj.CLimChangeHandler();
         end
@@ -90,13 +91,13 @@ classdef CLimGUI < handle
         end
         function SanitizeCLim(obj)
             if str2double(obj.BoundEntries(1).String) >= str2double(obj.BoundEntries(2).String)
-                obj.BoundEntries(2).String = num2str(str2double(obj.BoundEntries(1).String) + obj.CLimIncrement);
+                obj.BoundEntries(2).String = obj.BoundsToText(str2double(obj.BoundEntries(1).String) + obj.CLimIncrement);
             end
         end
         function UpdateHistogram(obj)
             cla(obj.HistogramAxes);
             if ~isempty(obj.Image)
-                histogram(obj.HistogramAxes, obj.Image.CData(:));
+                histogram(obj.HistogramAxes, obj.Image.CData(:), 'EdgeColor', 'none', 'FaceColor', [0, 0, 1]);
             end
             obj.CLimIncrement = diff(xlim(obj.HistogramAxes))/20;
         end
@@ -112,11 +113,11 @@ classdef CLimGUI < handle
             end
         end
         function UpdateCLimFromAxes(obj)
-            obj.BoundEntries(1).String = num2str(obj.ImageAxes.CLim(1));
-            obj.BoundEntries(2).String = num2str(obj.ImageAxes.CLim(2));
+            obj.BoundEntries(1).String = sprintf('%.03f', obj.ImageAxes.CLim(1));
+            obj.BoundEntries(2).String = sprintf('%.03f', obj.ImageAxes.CLim(2));
         end
         function CLimChangeHandler(obj)
-            obj.CLim = [str2double(obj.BoundEntries(1).String), str2double(obj.BoundEntries(2).String)];
+            obj.CLim = obj.GetCLim();
             obj.UpdateHistogram();
             obj.UpdateHistogramHighlight();
             obj.ApplyCLimToAxes();
@@ -158,14 +159,21 @@ classdef CLimGUI < handle
     
                 if obj.inHistogramAxes(xFig, yFig)
                     colorVal = obj.mapFigureXToColor(xFig);
-                    switch obj.ParentFigure.SelectionType
-                        case 'alt'
-                            % Right click
-                            obj.SetCLim(2, colorVal);
-                        otherwise
-                            % Left click
-                            obj.SetCLim(1, colorVal);
+                    currentCLim = obj.GetCLim();
+                    middleCLim = mean(currentCLim);
+                    if colorVal <= middleCLim
+                        obj.SetCLim(1, colorVal);
+                    else
+                        obj.SetCLim(2, colorVal);
                     end
+%                     switch obj.ParentFigure.SelectionType
+%                         case 'alt'
+%                             % Right click
+%                             obj.SetCLim(2, colorVal);
+%                         otherwise
+%                             % Left click
+%                             obj.SetCLim(1, colorVal);
+%                     end
                 end
             end
 
@@ -180,14 +188,21 @@ classdef CLimGUI < handle
                 obj.IsSelectingCLim = true;
 
                 colorVal = obj.mapFigureXToColor(xFig);
-                switch obj.ParentFigure.SelectionType
-                    case 'alt'
-                        % Right click
-                        obj.SetCLim(2, colorVal);
-                    otherwise
-                        % Left click
-                        obj.SetCLim(1, colorVal);
+                currentCLim = obj.GetCLim();
+                middleCLim = mean(currentCLim);
+                if colorVal <= middleCLim
+                    obj.SetCLim(1, colorVal);
+                else
+                    obj.SetCLim(2, colorVal);
                 end
+%                 switch obj.ParentFigure.SelectionType
+%                     case 'alt'
+%                         % Right click
+%                         obj.SetCLim(2, colorVal);
+%                     otherwise
+%                         % Left click
+%                         obj.SetCLim(1, colorVal);
+%                 end
             end
             obj.CLimChangeHandler();
         end
