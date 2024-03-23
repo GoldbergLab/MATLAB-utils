@@ -130,7 +130,7 @@ classdef uitable2 < handle
                 obj.UserBackgroundColor(end+1:end+rowDifference, :) = ones(rowDifference, 3);
             elseif rowDifference < 0
                 % Trim off row colors
-                obj.UserBackgroundColor = obj.UserBackgroundColor(1:numRows, 1);
+                obj.UserBackgroundColor = obj.UserBackgroundColor(1:numRows, :);
             end
         end
         function ResetBackgroundColor(obj, color)

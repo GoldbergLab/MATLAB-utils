@@ -52,8 +52,7 @@ if display
     fprintf('\t<strong>Path</strong>:        %s\n', MATLAB_utils_path);
     fprintf('\t<strong>git hash</strong>:    %s\n', hash(1:7));
     fprintf('\t<strong>git branch</strong>:  %s\n', branch);
-    fprintf('\t<strong>git url</strong>:     <a href="%s">GitHub page</a>\n', url);
-    fprintf('\n');
+    fprintf('\t<strong>GitHub page</strong>: <a href="%s">%s</a>\n', url, url);
     fprintf('<strong>Functions</strong>:\n');
     
     commandWindowSize = matlab.desktop.commandwindow.size;
