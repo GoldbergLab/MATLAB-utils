@@ -7,8 +7,8 @@ function [presentation, slide] = pptAddFigure(presentationOrPath, fig, slideNum)
 %
 % where,
 %    presentationOrPath is either a path to an existing presentation, a
-%       path for a new presentation, or an existing presentation object
-%       function.
+%       path for a new presentation, an existing presentation object, or an
+%       empty array, which will use the currently active presentation.
 %    fig is a handle to a MATLAB figure to insert in the presentation
 %    slideNum is an optional index to insert the new slide. If omitted, the
 %       slide will be added at the end
@@ -25,7 +25,7 @@ function [presentation, slide] = pptAddFigure(presentationOrPath, fig, slideNum)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if ischar(presentationOrPath)
+if ischar(presentationOrPath) && ~isempty(presentationOrPath)
     presentationPath = presentationOrPath;
     % User passed in path to open/create
     ppt = actxserver('PowerPoint.Application');
@@ -42,6 +42,13 @@ if ischar(presentationOrPath)
         end
     else
         error('Given file is not a valid powerpoint presentation: %s', presentationPath);
+    end
+elseif isempty(presentationOrPath)
+    % Use currently active presentation, or create a new one if none exists
+    try
+        presentation = ppt.ActivePresentation;
+    catch ME
+        % Probably no active presentation
     end
 else
     % User passed in ppt presentation object
@@ -83,10 +90,4 @@ catch ME
     if exist(tempImagePath, 'file')
         delete(tempImagePath);
     end
-end
-
-if isempty(presentationPath)
-    presentation.Save();
-else
-    presentation.SaveAs(presentationPath);
 end
