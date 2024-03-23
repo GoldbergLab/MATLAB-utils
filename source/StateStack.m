@@ -1,14 +1,15 @@
 classdef StateStack < handle
     properties
-        UndoStack       cell = {}
-        RedoStack       cell = {}
-        MaxStackSize    double = 20
+        UndoStack       (1, :) cell = {}
+        RedoStack       (1, :) cell = {}
+        MaxStackSize    (1, 1) double
     end
     methods
         function obj = StateStack(maxStackSize)
-            if exist('maxStackSize', 'var') && ~isempty(maxStackSize)
-                obj.MaxStackSize = maxStackSize;
+            arguments
+                maxStackSize (1, 1) double {mustBeInteger, mustBePositive} = 20
             end
+            obj.MaxStackSize = maxStackSize;
         end
         function SaveState(obj, currentState)
             % Save state to the undo stack, clearing the redo stack in the
