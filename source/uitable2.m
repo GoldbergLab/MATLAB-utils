@@ -173,7 +173,12 @@ classdef uitable2 < handle
         end
         
         function value = get.ColumnRearrangeable(obj)
-            value = obj.UITable.ColumnRearrangeable;
+            try
+                value = obj.UITable.ColumnRearrangeable;
+            catch
+                % 2021a and possibly earlier versions error on this
+                value = false;
+            end
         end
         
         function value = get.ColumnFormat(obj)
@@ -340,7 +345,12 @@ classdef uitable2 < handle
         end
         
         function set.ColumnRearrangeable(obj, value)
-            obj.UITable.ColumnRearrangeable = value;
+            try
+                obj.UITable.ColumnRearrangeable = value;
+            catch ME
+                % 2021a and possibly earlier versions error on this
+                warning('This version of MATLAB does not appear to allow rearranging columns in a uitable - please upgrade to MATLAB 2022 or later to get that feature.');
+            end
         end
         
         function set.ColumnFormat(obj, value)
