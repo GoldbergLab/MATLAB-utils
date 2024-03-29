@@ -45,9 +45,10 @@ classdef VideoPainter < VideoBrowser
             obj.PaintedFrames = false(size(obj.VideoData, 1));
 
             obj.SubMaskOrigins = vertcat(options.MaskOrigins{:});
+            disp(obj.SubMaskOrigins);
             maskSizes = cellfun(@(mask)size(mask, [1, 2]), options.Masks, 'UniformOutput', false);
-            obj.SubMaskSizes = vertcat(maskSizes{:});
-
+            obj.SubMaskSizes = fliplr(vertcat(maskSizes{:}));
+            disp(obj.SubMaskSizes);
             for k = 1:length(options.Masks)
                 obj.SetSubMask(options.Masks{k}, k)
             end
@@ -59,7 +60,7 @@ classdef VideoPainter < VideoBrowser
             x1 = maskOrigin(1) + maskSize(1)-1;
             y0 = maskOrigin(2);
             y1 = maskOrigin(2) + maskSize(2) - 1;
-            obj.PaintMask(x0:x1, y0:y1, :) = mask;
+            obj.PaintMask(y0:y1, x0:x1, :) = mask;
         end
         function mask = GetSubMask(obj, maskIdx)
             maskOrigin = obj.SubMaskOrigins(maskIdx, :);
@@ -68,7 +69,7 @@ classdef VideoPainter < VideoBrowser
             x1 = maskOrigin(1) + maskSize(1)-1;
             y0 = maskOrigin(2);
             y1 = maskOrigin(2) + maskSize(2) - 1;
-            mask = obj.PaintMask(x0:x1, y0:y1, :);
+            mask = obj.PaintMask(y0:y1, x0:x1, :);
         end
         function createDisplayArea(obj)
             createDisplayArea@VideoBrowser(obj);
