@@ -4,7 +4,7 @@ classdef VideoBrowser < handle
     %       A separate axes contains a 1D graph representing some value for
     %       each frame. Moving the mouse over this navigational axes causes
     %       the video frame to update to the corresponding frame number.
-    properties (Access = private)
+    properties (Access = protected)
         VideoFrame              matlab.graphics.primitive.Image     % An image object containing the video frame image
         FrameMarker             matlab.graphics.primitive.Line      % A line on the NavigationAxes marking what frame is displayed
         FrameNumberMarker       matlab.graphics.primitive.Text      % Text on the NavigationAxes indicating what frame number is displayed
@@ -58,7 +58,7 @@ classdef VideoBrowser < handle
         AudioData = []                          % Audio data, a NxC array, where N is # of samples, C is # of channels
     end
     methods
-        function obj = VideoBrowser(VideoData, NavigationDataOrFcns, NavigationColors, NavigationColormaps, NavigationCLims, title)
+        function obj = VideoBrowser(VideoData, options)
             % Construct a new VideoBrowser object.
             %   VideoData = 
             %       a char array representing a file path to a video
@@ -71,7 +71,8 @@ classdef VideoBrowser < handle
             %           in the second cell, as a C x N 2D array, where C is
             %           the number of audio channels, and N is the number 
             %           of audio samples.
-            %   NavigationDataOrFcn = one of the following, or a cell array
+            %   The following are optional name-value pairs:
+            %   NavigationData = one of the following, or a cell array
             %           containing multiple of these options. If a cell 
             %           array is passed, multiple navigation axes will be,
             %           stacked each showing the selected navigation 
@@ -109,26 +110,20 @@ classdef VideoBrowser < handle
             %       This can also be a cell array if multiple navigation 
             %       axes are specified in the NavigationDataOrFcn argument.            
             %   title = a char array to use as the image title
+            arguments
+                VideoData
+                options.NavigationData = [];
+                options.NavigationColor = 'black';
+                options.NavigationColormap = colormap();
+                options.NavigationCLim = [13.0000, 24.5000]
+                options.Title = '';
+            end
 
-            if ~exist('title', 'var') || isempty(title)
-                % Default title is an empty string
-                title = '';
-            end
-            obj.Title = title;
-
-            if ~exist('NavigationDataOrFcns', 'var') || isempty(NavigationDataOrFcns)
-                NavigationDataOrFcns = [];
-            end
-            if ~exist('NavigationColors', 'var') || isempty(NavigationColors)
-                NavigationColors = 'black';
-            end
-            if ~exist('NavigationColormaps', 'var') || isempty(NavigationColormaps)
-                NavigationColormaps = colormap(obj.MainFigure);
-            end
-            if ~exist('NavigationCLims', 'var') || isempty(NavigationCLims)
-                % Set default navigation axes color limits
-                NavigationCLims = [13.0000, 24.5000];
-            end
+            NavigationDataOrFcns = options.NavigationData;
+            NavigationColors = options.NavigationColor;
+            NavigationColormaps = options.NavigationColormap;
+            NavigationCLims = options.NavigationCLim;
+            obj.Title = options.Title;
 
             % We'll need the same # of NavigationDataOrFcn, NavigationColor, NavigationColormap, NavigationCLim
             if ~iscell(NavigationDataOrFcns)

@@ -12,6 +12,10 @@ classdef VideoPainter < VideoBrowser
         PaintEnabled            logical = true;                      % Enable painting with mouse?
         PaintedFrames           logical = logical.empty()            % Mask of frames that have been painted
     end
+    properties (Access = protected)
+        SubMaskOrigins          (:, 2) double                        % Sub-masks origins
+        SubMaskSizes            (:, 2) double                        % Sub-masks sizes
+    end
     properties (Transient)
         StrokeEndHandler        function_handle = @NOP               % Callback that fires when user completes a stroke, or uses undo/redo
     end
@@ -19,11 +23,52 @@ classdef VideoPainter < VideoBrowser
         IsPainting              logical = false                      % Is user currently holding mouse button down on video axes?
     end
     methods
-        function obj = VideoPainter(varargin)
-            obj@VideoBrowser(varargin{:});
+        function obj = VideoPainter(videoData, options)
+            arguments
+                videoData
+                options.NavigationData
+                options.NavigationColor
+                options.NavigationColormap
+                options.NavigationCLim
+                options.Title
+                options.Masks {mustBeCellOfType(options.Masks, 'logical'), mustBeCellOfDims(options.Masks, 3)}
+                options.MaskOrigins {mustBeCellOfType(options.MaskOrigins, 'double'), mustBeCellOfDims(options.MaskOrigins, 2)}
+            end
+            vbOptions = options;
+            vbOptions = rmfield(vbOptions, 'Masks');
+            vbOptions = rmfield(vbOptions, 'MaskOrigins');
+            args = namedargs2cell(vbOptions);
+            obj@VideoBrowser(videoData, args{:});
+
             obj.Stack = StateStack(100);
             obj.SaveState();
             obj.PaintedFrames = false(size(obj.VideoData, 1));
+
+            obj.SubMaskOrigins = vertcat(options.MaskOrigins{:});
+            maskSizes = cellfun(@(mask)size(mask, [1, 2]), options.Masks, 'UniformOutput', false);
+            obj.SubMaskSizes = vertcat(maskSizes{:});
+
+            for k = 1:length(options.Masks)
+                obj.SetSubMask(options.Masks{k}, k)
+            end
+        end
+        function SetSubMask(obj, mask, maskIdx)
+            maskOrigin = obj.SubMaskOrigins(maskIdx, :);
+            maskSize = obj.SubMaskSizes(maskIdx, :);
+            x0 = maskOrigin(1);
+            x1 = maskOrigin(1) + maskSize(1)-1;
+            y0 = maskOrigin(2);
+            y1 = maskOrigin(2) + maskSize(2) - 1;
+            obj.PaintMask(x0:x1, y0:y1, :) = mask;
+        end
+        function mask = GetSubMask(obj, maskIdx)
+            maskOrigin = obj.SubMaskOrigins(maskIdx, :);
+            maskSize = obj.SubMaskSizes(maskIdx, :);
+            x0 = maskOrigin(1);
+            x1 = maskOrigin(1) + maskSize(1)-1;
+            y0 = maskOrigin(2);
+            y1 = maskOrigin(2) + maskSize(2) - 1;
+            mask = obj.PaintMask(x0:x1, y0:y1, :);
         end
         function createDisplayArea(obj)
             createDisplayArea@VideoBrowser(obj);
@@ -40,7 +85,7 @@ classdef VideoPainter < VideoBrowser
             end
             if isempty(obj.PaintMaskImage) || ~isvalid(obj.PaintMaskImage)
                 % Initialize mask overlay (first call only)
-                [~, h, w] = size(obj.PaintMask);
+                [h, w, ~] = size(obj.PaintMask);
                 paintData = repmat(permute(obj.PaintMaskColor, [3, 1, 2]), h, w, 1);
                 hold(obj.VideoAxes, 'on');
                 obj.PaintMaskImage = imshow(paintData, 'Parent', obj.VideoAxes);
@@ -50,7 +95,7 @@ classdef VideoPainter < VideoBrowser
                 obj.VideoAxes.PickableParts = 'all';
             end
             % Update alpha data to make mask region overlay visible
-            obj.PaintMaskImage.AlphaData = squeeze(obj.PaintMask(obj.CurrentFrameNum, :, :)*0.4);
+            obj.PaintMaskImage.AlphaData = squeeze(obj.PaintMask(:, :, obj.CurrentFrameNum)*0.4);
         end
         function updatePaintBrushParams(obj)
             if ~isfield(obj.PaintBrush, 'BrushRadius')
@@ -65,8 +110,8 @@ classdef VideoPainter < VideoBrowser
             end
             obj.PaintBrush.xMin = obj.PaintBrush.BrushRadius+1;
             obj.PaintBrush.yMin = obj.PaintBrush.BrushRadius+1;
-            obj.PaintBrush.xMax = size(obj.PaintMask, 3) - obj.PaintBrush.BrushRadius;
-            obj.PaintBrush.yMax = size(obj.PaintMask, 2) - obj.PaintBrush.BrushRadius;
+            obj.PaintBrush.xMax = size(obj.PaintMask, 2) - obj.PaintBrush.BrushRadius;
+            obj.PaintBrush.yMax = size(obj.PaintMask, 1) - obj.PaintBrush.BrushRadius;
         end
         function updatePaintBrush(obj, x, y)
             % Create/update brush marker (a circle constructed from a
@@ -106,9 +151,9 @@ classdef VideoPainter < VideoBrowser
             if x >= obj.PaintBrush.xMin && x <= obj.PaintBrush.xMax && y >= obj.PaintBrush.yMin && y <= obj.PaintBrush.yMax
                 r = obj.PaintBrush.ActualBrushRadius;
                 if obj.IsErasing
-                    obj.PaintMask(obj.CurrentFrameNum, y-r:y+r, x-r:x+r) = squeeze(obj.PaintMask(obj.CurrentFrameNum, y-r:y+r, x-r:x+r)) & ~obj.PaintBrush.Brush;
+                    obj.PaintMask(y-r:y+r, x-r:x+r, obj.CurrentFrameNum) = squeeze(obj.PaintMask(y-r:y+r, x-r:x+r, obj.CurrentFrameNum)) & ~obj.PaintBrush.Brush;
                 else
-                    obj.PaintMask(obj.CurrentFrameNum, y-r:y+r, x-r:x+r) = squeeze(obj.PaintMask(obj.CurrentFrameNum, y-r:y+r, x-r:x+r)) | obj.PaintBrush.Brush;
+                    obj.PaintMask(y-r:y+r, x-r:x+r, obj.CurrentFrameNum) = squeeze(obj.PaintMask(y-r:y+r, x-r:x+r, obj.CurrentFrameNum)) | obj.PaintBrush.Brush;
                 end
             end
         end
@@ -186,12 +231,12 @@ classdef VideoPainter < VideoBrowser
         function state = getState(obj)
             % Get current state (for the undo/redo stack)
             state.frameNum = obj.CurrentFrameNum;
-            state.frame = squeeze(obj.PaintMask(obj.CurrentFrameNum, :, :));
+            state.frame = squeeze(obj.PaintMask(:, :, obj.CurrentFrameNum));
         end
         function setState(obj, state)
             % Set current state (from the undo/redo stack)
             obj.CurrentFrameNum = state.frameNum;
-            obj.PaintMask(obj.CurrentFrameNum, :, :) = state.frame;
+            obj.PaintMask(:, :, obj.CurrentFrameNum) = state.frame;
             obj.updateVideoFrame();
             obj.StrokeEndHandler();
         end
@@ -232,5 +277,19 @@ classdef VideoPainter < VideoBrowser
             app.PaintMask = newMask;
             app.updateVideoFrame();
         end
+    end
+end
+
+function mustBeCellOfDims(array, numDims)
+    valid = all(cellfun(@(x)ndims(x) == numDims, array));
+    if ~valid
+        error('Argument must be a cell array containing only %d-dimensional arrays', numDims);
+    end
+end
+
+function mustBeCellOfType(array, type)
+    valid = all(cellfun(@(x)isa(x, type), array));
+    if ~valid
+        error('Argument must be a cell array containing only type %s', type);
     end
 end
