@@ -66,12 +66,7 @@ else
     roots = {};
     for k = 1:length(originalPaths)
         % Discover root by iteratively getting parent directory
-        oldPathRoot = '';
-        pathRoot = originalPaths{k};
-        while ~strcmp(oldPathRoot, pathRoot)
-            oldPathRoot = pathRoot;
-            pathRoot = fileparts(pathRoot);
-        end
+        pathRoot = getPathRoot(originalPaths{k});
         % If the path does not include a root directory, then we'll end up with an empty path
         if ~isempty(pathRoot)
             roots{end+1} = pathRoot;
