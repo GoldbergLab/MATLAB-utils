@@ -1,22 +1,26 @@
-function addXMarkers(varargin)
+function rectangles = addXMarkers(times, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % addXMarkers: add markers to x-axis of figure, typically for spectrograms
-% usage: addXMarkers(times, color, height)
-%        addXMarkers(times, color, height, bgcolor)
-%        addXMarkers(times, titles, ___)
-%        addXMarkers(ax, ___)
+% usage: addXMarkers(times)
+%        addXMarkers(times, Name, Value, ...)
 %
 % where,
 %    times is a Nx2 numerical array where times(k, 1) is the onset time of
 %       the kth marker, and times(k, 2) is the offset time of the kth
 %       marker.
-%    color is a color descriptor for the face color of the markers
-%    height is the desired height of the markers in pixels
-%    bgcolor is an optional color for the background between the markers.
-%       By default it is the same as the background color of the figure.
-%    titles is an optional cell array of names to print on each marker.
-%    ax is an optional argument specifying the axes to apply the markers
-%       to. By default, they will be added to the current axes: gca()
+%    Name/value arguments can include:
+%       Color: a color descriptor for the face color of the markers
+%       Height: the desired height of the markers in pixels
+%       BackgroundColor is an optional color for the background between the 
+%           markers. By default it is the same as the background color of 
+%           the figure.
+%       Label is a char array to use to label the row of markers
+%       Titles is a cell array of names to print on each marker.
+%       Parent specifyies the axes to apply the markers to. By default, 
+%           they will be added to the current axes: gca()
+%       Y is the y-value (in axes units) to place the top of the markers,
+%           or a grpahics object to align the markers to the bottom of.
+%           If omitted, markers will be aligned with the bottom of the axes
 %
 % This function adds markers along the x-axis of an existing plot.
 %   Typically this is used to add time markers to a spectrogram.
@@ -29,71 +33,29 @@ function addXMarkers(varargin)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-argIdx = 1;
-
-% Get axes on which to put markers
-if length(varargin) >= argIdx
-    if isa(varargin{argIdx}, 'matlab.graphics.axis.Axes')
-        % User supplied axes
-        ax = varargin{argIdx};
-        argIdx = argIdx + 1;
-    else
-        % User did not supply axes - get existing or create new axes
-        ax = gca();
-    end
+arguments
+    times (:, 2) double
+    options.Color = 'red'
+    options.Height (1, 1) double = 10
+    options.Label char = ''
+    options.Titles cell {mustBeText} = {}
+    options.Parent = gca()
+    options.BackgroundColor = gca().Color
+    options.Y = NaN
 end
 
-% Get marker times
-if length(varargin) >= argIdx
-    % User supplied times
-    times = varargin{argIdx};
-    argIdx = argIdx + 1;
-else
-    error('times is a required argument');
-end
-
-% Get titles of markers
-if length(varargin) >= argIdx
-    % Is this argument actually titles?
-    if iscell(varargin{argIdx})
-        % This must be the titles
-        titles = varargin{argIdx};
-        argIdx = argIdx + 1;
-    else
-        % This argument must not be titles - move on
-        titles = {};
-    end
-end
-
-% Get marker color
-if length(varargin) >= argIdx
-    % User supplied color
-    color = varargin{argIdx};
-    argIdx = argIdx + 1;
-else
-    % User did not supply color - use default
-    color = 'red';
-end
-
-% Get marker height
-if length(varargin) >= argIdx
-    % User supplied marker height
-    height = varargin{argIdx};
-    argIdx = argIdx + 1;
-else
-    % User did not supply marker height - use default
-    height = 10;
-end
-
-% Optional last argument
-if length(varargin) >= argIdx
-    % User supplied background color
-    bgcolor = varargin{argIdx};
-    argIdx = argIdx + 1;
-else
-    % User did not supply background color - use default.
+% Gather arguments
+ax = options.Parent;
+color = options.Color;
+if isempty(options.BackgroundColor)
     bgcolor = ax.Parent.Color;
+else
+    bgcolor = options.BackgroundColor;
 end
+height = options.Height;
+label = options.Label;
+titles = options.Titles;
+Y1 = options.Y;
 
 % Turn off x-axis tick lines
 ax.XRuler.TickDirection = 'none';
@@ -102,29 +64,52 @@ ax.XRuler.TickDirection = 'none';
 originalYLim = ylim(ax);
 originalAxesUnits = ax.Units;
 ax.Units = 'pixels';
-originalAxesHeight = ax.Position(4);
 
 % Convert height in pixels to frequency units
+originalAxesHeight = ax.Position(4);
 realHeight = height * diff(originalYLim) / originalAxesHeight;
-
-% Change axes y limits to make space at bottom for markers
-newY0 = originalYLim(1) - realHeight;
-ylim(ax, [newY0, originalYLim(2)]);
+if ~isgraphics(Y1) && isnan(Y1)
+    % Use default position of markers (bottom of axes)
+    % Change axes y limits to make space at bottom for markers
+    newY0 = originalYLim(1) - realHeight;
+    ylim(ax, [newY0, originalYLim(2)]);
+else
+    if isgraphics(Y1)
+        if isprop(Y1, 'Position')
+            Y1 = Y1.Position(3);
+        elseif isprop(Y1, 'YData')
+            Y1 = min(Y1.YData);
+        end
+    end
+    newY0 = Y1 - realHeight;
+    yl = ylim(ax);
+    if newY0 < yl(1)
+        ylim(ax, [newY0, yl(2)]);
+    end
+end
 
 % Lock y-axis zoom
 z = zoom(ax);
 z.Motion = 'horizontal';
 z.Enable = 'on';
 
+rectangles = gobjects(1, size(times, 1)+1);
+
 % Add background color
-rectangle('Position', [0, newY0, diff(xlim(ax)), realHeight], 'FaceColor', bgcolor, 'EdgeColor', 'black');
+rectangles(end) = rectangle(ax, 'Position', [0, newY0, diff(xlim(ax)), realHeight], 'FaceColor', bgcolor, 'EdgeColor', 'black');
+
+% Add label, if provided
+if ~isempty(label)
+    labelText = text(ax, 0, newY0 + realHeight/2, [label, ' '], 'HorizontalAlignment', 'right', 'Color', color, 'Units', 'data');
+    labelText.Units = 'normalized';
+end
 
 % Loop over times to create markers
 for k = 1:size(times, 1)
     x0 = times(k, 1);
     width = diff(times(k, :));
     % Create marker
-    rectangle('Position', [x0, newY0, width, realHeight], 'Parent', ax, 'FaceColor', color, 'EdgeColor', 'none');
+    rectangles(k) = rectangle(ax, 'Position', [x0, newY0, width, realHeight], 'Parent', ax, 'FaceColor', color, 'EdgeColor', 'none');
     if ~isempty(titles)
         % Add title
         text(ax, x0 + width/2, newY0 + realHeight/2, titles{k}, 'HorizontalAlignment', 'center');
