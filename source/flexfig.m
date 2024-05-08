@@ -6,9 +6,6 @@ classdef flexfig < handle
     %
     % Add an editable axes with the 
     properties (Access = protected)
-        IsCtrlKeyDown = false
-        IsShiftKeyDown = false
-        IsAltKeyDown = false;
     end
     properties
         Figure                  matlab.ui.Figure                    % The main figure window
@@ -20,15 +17,8 @@ classdef flexfig < handle
         AnchorPoints            cell =   {[0.0, 0.0], [0.0, 0.5], [0.0, 1.0], [0.5, 1.0], [1.0, 1.0], [1.0, 0.5], [1.0, 0.0], [0.5, 0.0], [0.5, 0.5]}  % Axes anchor points in normalized coordinates
         AnchorXControl          cell =   {1,          1,          1,          [],         2,          2,          2,          [],         [1, 2]}
         AnchorYControl          cell =   {1,          [],         2,          2,          2,          [],         1           1,          [1, 2]}
-        AnchorVisible           logical = [true,      true,       true,       true,       true,       true,       true,       true,       true]
-        AnchorGrabRangeBoost    double = [1,          1,          1,          1,          1,          1,          1,          1,          3]
-        AnchorIconBaseXY (2, :) double = [[1.0, 1.0, 0.0, 0.8, 1.0, 1.0, 0.6, 0.4, 1.0, 1.0, 0.0]; [0.0, 1.0, 1.0, 1.0, 0.8, 0.6, 1.0, 1.0, 0.4, 1.0, 1.0]]
-        AnchorIconRotation      double = [0,          1,          2,          3,          4,          5,          6,          7,          8] * (-pi/4)
-        AnchorIconOffsetX       double = [0,          0,          0,          1,          0,          0,          0,         -1,          0] / sqrt(2)
-        AnchorIconOffsetY       double = [0,         -1,          0,          0,          0,          1,          0,          0,          0] / sqrt(2)
-        AnchorIconXY            cell =   {}
-        AnchorIconHandles       matlab.graphics.Graphics
-        AnchorIconScale = 0.05
+        AnchorGrabRangeBoost    double = [1,          1,          1,          1,          1,          1,          1,          1,          inf]
+        AnchorPointer           cell =   {'botl',     'left',     'topl',     'top',      'topr',     'right',    'botr',     'bottom',   'fleur'}
         GrabAxes = gobjects().empty
         GrabAnchorIndex = []
         GrabAxesXControl = []
@@ -64,22 +54,6 @@ classdef flexfig < handle
                     % Create figure
                     obj.Figure = figure(varargin{:}, 'Units', 'normalized');
                 end
-            end
-            
-            % Assemble full anchor handle shape
-            baseCoords = obj.AnchorIconBaseXY;
-            R = [[0, 1]; [-1, 0]];
-            for r = 1:3
-                baseCoords = (baseCoords'*R)';
-                obj.AnchorIconBaseXY = [obj.AnchorIconBaseXY, baseCoords];
-            end
-
-            % Pre-calculate rotated anchor design coordinates for each anchor point
-            for anchorIdx = 1:length(obj.AnchorIconRotation)
-                angle = obj.AnchorIconRotation(anchorIdx);
-                rotationMatrix = [[cos(angle), -sin(angle)]; [sin(angle), cos(angle)]];
-                offsetXY = rotationMatrix * [obj.AnchorIconOffsetX(anchorIdx); obj.AnchorIconOffsetY(anchorIdx)];
-                obj.AnchorIconXY{anchorIdx} = rotationMatrix * (obj.AnchorIconBaseXY + offsetXY);
             end
 
             % Set callbacks and other properties
@@ -181,34 +155,13 @@ classdef flexfig < handle
             axesList = obj.getAxesList();
             axesIdx = find(ax == axesList, 1);
         end
-        function anchorHandle = drawAnchor(obj, ax, anchorIdx)
-            % Draw an anchor handle to indicate a draggable point
+        function setPointer(obj, pointerShape)
+            % Set the mouse pointer
             arguments
                 obj flexfig
-                ax (1, 1) matlab.graphics.axis.Axes
-                anchorIdx (1, 1) double
+                pointerShape char = 'arrow'
             end
-            holdState = ishold(ax);
-            ax.XLimMode = 'manual';
-            ax.YLimMode = 'manual';
-            hold(ax, 'on');
-
-            pixelsPerDataUnit = flexfig.getPixelsPerDataUnit(ax);
-            x = obj.AnchorIconXY{anchorIdx}(1, :);
-            y = obj.AnchorIconXY{anchorIdx}(2, :);
-            sizeAdjustment = 0.8;
-            x = sizeAdjustment * x * obj.GrabRange / pixelsPerDataUnit(1);
-            y = sizeAdjustment * y * obj.GrabRange / pixelsPerDataUnit(2);
-            xl = xlim(ax);
-            yl = ylim(ax);
-            x = (x + obj.AnchorPoints{anchorIdx}(1) * diff(xl)) + xl(1);
-            y = (y + obj.AnchorPoints{anchorIdx}(2) * diff(yl)) + yl(1);
-            anchorHandle = line(ax, x, y, 'PickableParts', 'none', 'HitTest', 'off', 'Color', 'k');
-            if holdState
-                hold(ax, 'on');
-            else
-                hold(ax, 'off');
-            end
+            obj.Figure.Pointer = pointerShape;
         end
         function [xAx, yAx, inAxes] = getAxesPositions(obj, xFig, yFig, firstInside)
             % Transform the given figure coordinates to the axes
@@ -258,7 +211,7 @@ classdef flexfig < handle
             end
         end
         function anchorIdx = getAnchorInRange(obj, ax, xAx, yAx)
-            % Get the anchor index of the first anchor found in range of
+            % Get the anchor index of the closest anchor found in range of
             % the given coordinates for the given axes
             arguments
                 obj flexfig
@@ -269,19 +222,29 @@ classdef flexfig < handle
             axPosition = flexfig.getPositionInUnits(ax, 'pixels');
             xAxPix = axPosition(1) + xAx * axPosition(3);
             yAxPix = axPosition(2) + yAx * axPosition(4);
-            foundAnchorInRange = false;
+            idxInRange = [];
+            distInRange = [];
             for anchorIdx = 1:length(obj.AnchorPoints)
                 anchorPoint = obj.AnchorPoints{anchorIdx};
                 xAnchorPix = axPosition(1) + anchorPoint(1) * axPosition(3);
                 yAnchorPix = axPosition(2) + anchorPoint(2) * axPosition(4);
-                if ((xAxPix-xAnchorPix)^2 + (yAxPix-yAnchorPix)^2) <= (obj.GrabRange * obj.AnchorGrabRangeBoost(anchorIdx))^2
-                    foundAnchorInRange = true;
-                    break;
+                dist = (xAxPix-xAnchorPix)^2 + (yAxPix-yAnchorPix)^2;
+                if dist <= (obj.GrabRange * obj.AnchorGrabRangeBoost(anchorIdx))^2
+                    idxInRange = [idxInRange, anchorIdx];       %#ok<AGROW> 
+                    distInRange = [distInRange, dist];          %#ok<AGROW> 
                 end
             end
-            if ~foundAnchorInRange
-                anchorIdx = [];
-            end
+            [~, closestIdx] = min(distInRange);
+            anchorIdx = idxInRange(closestIdx);
+        end
+        function controlDown = isControlDown(obj)
+            controlDown = any(strcmp(obj.Figure.CurrentModifier, 'control'));
+        end
+        function shiftDown = isShiftDown(obj)
+            shiftDown = any(strcmp(obj.Figure.CurrentModifier, 'shift'));
+        end
+        function altDown = isAltDown(obj)
+            altDown = any(strcmp(obj.Figure.CurrentModifier, 'alt'));
         end
         function MouseMotionHandler(obj, ~, ~)
             % Respond to mouse motion
@@ -312,8 +275,8 @@ classdef flexfig < handle
                     axYCoords = sort(axYCoords);
                 end
 
-                if obj.IsShiftKeyDown || obj.SnapToGrid || obj.SnapToAxes
-                    [axXCoords, axYCoords] = obj.snapFigCoords(axXCoords, axYCoords, obj.SnapToGrid || obj.IsShiftKeyDown, obj.SnapToAxes || obj.IsShiftKeyDown);
+                if obj.isShiftDown() || obj.SnapToGrid || obj.SnapToAxes
+                    [axXCoords, axYCoords] = obj.snapFigCoords(axXCoords, axYCoords, obj.SnapToGrid || obj.isShiftDown(), obj.SnapToAxes || obj.isShiftDown());
                 end
                 
                 ax.Position = [axXCoords(1), axYCoords(1), abs(diff(axXCoords)), abs(diff(axYCoords))];
@@ -322,23 +285,29 @@ classdef flexfig < handle
                     axesList(axesIdx).XLimMode = 'manual';
                     axesList(axesIdx).YLimMode = 'manual';
                 end
+                obj.updatePointer();
             end
-            for axesIdx = 1:length(axesList)
-                if length(obj.AnchorIconHandles) < axesIdx
-                    break;
-                end
-                delete(obj.AnchorIconHandles(axesIdx));
+        end
+        function updatePointer(obj)
+            if ~obj.isControlDown()
+                obj.setPointer();
+                return;
             end
+            [xFig, yFig] = obj.getFigureCoordinates();
+            [xAx, yAx, inAxes] = obj.getAxesPositions(xFig, yFig);
+            anchorIdxInRange = [];
+            axesList = obj.getAxesList();
             for axesIdx = find(inAxes)
                 % Loop over any axes we are inside
-                if obj.IsCtrlKeyDown
-                    anchorIdxInRange = obj.getAnchorInRange(axesList(axesIdx), xAx(axesIdx), yAx(axesIdx));
-                    if ~isempty(anchorIdxInRange)
-                        if obj.AnchorVisible(anchorIdxInRange)
-                            obj.AnchorIconHandles(axesIdx) = obj.drawAnchor(axesList(axesIdx), anchorIdxInRange);
-                        end
-                    end
+                anchorIdxInRange = obj.getAnchorInRange(axesList(axesIdx), xAx(axesIdx), yAx(axesIdx));
+                if ~isempty(anchorIdxInRange)
+                    break;
                 end
+            end
+            if ~isempty(anchorIdxInRange)
+                obj.setPointer(obj.AnchorPointer{anchorIdxInRange});
+            else
+                obj.setPointer();
             end
         end
         function [xFig, yFig] = getFigureCoordinates(obj)
@@ -407,7 +376,7 @@ classdef flexfig < handle
             
             axesList = obj.getAxesList();
 
-            if obj.IsCtrlKeyDown
+            if obj.isControlDown()
                 [xAx, yAx, axesIdx] = obj.getAxesPositions(xFig, yFig, true);
                 if axesIdx
                     % User clicked inside one of the axes
@@ -419,7 +388,7 @@ classdef flexfig < handle
                     end
                 end
             else
-                if obj.IsAltKeyDown
+                if obj.isAltDown()
                     ax = axes('Position', [xFig, yFig, 0, 0], 'Parent', obj.Figure);
                     anchorIdx = 7;  % Bottom right anchor
                     obj.updateAxesGrabPoint(xFig, yFig, ax, anchorIdx);
@@ -477,18 +446,13 @@ classdef flexfig < handle
                 event matlab.ui.eventdata.KeyData
             end
             switch event.Key
-                case 'shift'
-                    obj.IsShiftKeyDown = true;
-                case 'control'
-                    obj.IsCtrlKeyDown = true;
-                case 'alt'
-                    obj.IsAltKeyDown = true;
                 case 'escape'
                     if ~isempty(obj.GrabAxes)
                         delete(obj.GrabAxes);
                         obj.endGrab();
                     end
             end
+            obj.updatePointer();
         end
         function KeyReleaseHandler(obj, ~, event)
             % Handle key releases
@@ -498,13 +462,8 @@ classdef flexfig < handle
                 event matlab.ui.eventdata.KeyData
             end
             switch event.Key
-                case 'shift'
-                    obj.IsShiftKeyDown = false;
-                case 'control'
-                    obj.IsCtrlKeyDown = false;
-                case 'alt'
-                    obj.IsAltKeyDown = false;
             end
+            obj.updatePointer();
         end
     end
     methods (Static, Access = protected)
