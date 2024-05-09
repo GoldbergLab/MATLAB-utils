@@ -1,4 +1,4 @@
-function showAudioSpectrogram(audio, samplingRate, ax, flim, clim)
+function im = showAudioSpectrogram(audio, samplingRate, ax, flim, clim)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % showAudioSpectrogram: Display spectrogram of an audio signal as an array
 % usage:  power = showAudioSpectrogram(audio, samplingRate, ax, flim)
@@ -17,6 +17,7 @@ function showAudioSpectrogram(audio, samplingRate, ax, flim, clim)
 %       the spectrogram image. Default is [13.0000, 24.5000]. This is in
 %       the same format as the 'SonogramClim' field of the electro_gui
 %       defaults files.
+%    im is a handle to the resulting image object
 %    
 % Display a spectrogram suitable for audio data.  Based on Aaron 
 %    Andalman's electro_gui algorithm that accounts for screen resolution.
@@ -62,7 +63,7 @@ set(ax,'units',originalUnits);
 xl = [0, length(audio)/samplingRate];
 xlim(ax, xl);
 
-imagesc(linspace(xl(1),xl(2), nTimeBins),f,power, 'Parent', ax);
+im = imagesc(linspace(xl(1),xl(2), nTimeBins),f,power, 'Parent', ax);
 
 set(ax, 'YDir', 'normal');
 c = colormap(ax, 'parula');
