@@ -89,7 +89,7 @@ for inputNum = 1:numInputs
     end
     
     % Create label
-    inputLabels(inputNum) = uicontrol('Parent', inputPanel, 'Style', 'text', 'Units', 'normalized', 'String', prompt, 'Position', labelPosition, 'HorizontalAlignment', 'right');
+    inputLabels(inputNum) = uicontrol('Parent', inputPanel, 'Style', 'edit', 'Units', 'normalized', 'String', prompt, 'Position', labelPosition, 'HorizontalAlignment', 'right', 'Enable', 'inactive');
     % Create control
     inputControls(inputNum) = uicontrol('Parent', inputPanel, 'Style', style, 'Units', 'normalized', 'String', string, 'Value', value, 'Position', controlPosition, 'HorizontalAlignment', 'left');
 end

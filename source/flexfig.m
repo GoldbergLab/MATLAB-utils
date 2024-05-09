@@ -27,6 +27,10 @@ classdef flexfig < handle
         GrabAxesY = []
         GrabAxesStartPosition = []
         GrabRange = 30 % in pixels
+        HighlightColor = 'red'
+        HighlightOn = false
+        OriginalChildXColors = {};
+        OriginalChildYColors = {};
     end
     properties (SetObservable)
     end
@@ -40,6 +44,10 @@ classdef flexfig < handle
             [snapToGrid, found, varargin] = flexfig.extractNameValue(varargin, 'SnapToGrid');
             if found
                 obj.SnapToGrid = snapToGrid;
+            end
+            [snapToAxes, found, varargin] = flexfig.extractNameValue(varargin, 'SnapToAxes');
+            if found
+                obj.SnapToAxes = snapToAxes;
             end
             [gridSize, found, varargin] = flexfig.extractNameValue(varargin, 'GridSize');
             if isempty(obj.Figure)
@@ -64,13 +72,54 @@ classdef flexfig < handle
             obj.Figure.WindowButtonDownFcn = @obj.MouseButtonDownHandler;
             obj.Figure.WindowButtonUpFcn = @obj.MouseButtonUpHandler;
             obj.Figure.CloseRequestFcn = @(varargin)delete(obj);
+%             obj.Figure.ContextMenu = uicontextmenu('Parent', obj.Figure);
+%             uimenu(obj.Figure.ContextMenu, 'Text', 'Tile', 'ButtonDownFcn', @obj.TileAxes);
 
+        end
+        function children = GetChildren(obj)
+            children = obj.Figure.Children;
+            children(arrayfun(@(g)isa(g, 'matlab.ui.container.ContextMenu'), children)) = [];
+        end
+        function tileSize = GetBestTileSize(obj)
+            children = obj.GetChildren();
+            numChildren = length(children);
+            if numChildren == 0
+                tileSize = [0, 0];
+                return
+            end
+            figPosition = getPositionWithUnits(obj.Figure, 'pixels');
+            currentRowWidth = 0;
+            currentRowHeight = 0;
+            currentColumnCount = 0;
+            maxRowWidth = figPosition(3);
+            for k = 1:numChildren
+                axPosition = getPositionWithUnits(children(k), 'pixels');
+                width = axPosition(3);
+                height = axPosition(4);
+                if width > maxRowWidth
+                    error('figure child is too wide to tile')
+                end
+                currentRowWidth = currentRowWidth + width;
+                currentRowHeight = max(height, currentRowHeight);
+                columnsPerRow = [];
+                if currentRowWidth >= maxRowWidth
+                    currentRowWidth = 0;
+                    currentRowHeight = 0;
+                    columnsPerRow(end+1) = currentColumnCount; %#ok<AGROW> 
+                    continue
+                else
+                    currentColumnCount = currentColumnCount + 1;
+                end
+            end
+            numColumns = max(columnsPerRow);
+            numRows = ceil(numChildren / numColumns);
+            tileSize = [numRows, numColumns];
         end
         function TileAxes(obj, tileSize, margin, snapToGrid)
             % Arrange axes in a tiled pattern
             arguments
                 obj flexfig
-                tileSize (1, 2) double                          % 2-vector containing the x and y size of the desired axes grid
+                tileSize (1, 2) double = obj.GetBestTileSize()  % 2-vector containing the x and y size of the desired axes grid
                 margin (1, 1) double = obj.GridSize;            % Size in pixels of the margin between axes
                 snapToGrid (1, 1) logical = obj.SnapToGrid      % Snap the tiled positions to the grid? If true, for best results, margin should be a multiple of obj.GridSnap
             end
@@ -144,8 +193,9 @@ classdef flexfig < handle
     end
     methods (Access = protected)
         function axesList = getAxesList(obj)
-            axesMask = arrayfun(@(g)isa(g, 'matlab.graphics.axis.Axes'), obj.Figure.Children);
-            axesList = obj.Figure.Children(axesMask);
+            children = obj.GetChildren();
+            axesMask = arrayfun(@(g)isa(g, 'matlab.graphics.axis.Axes'), children);
+            axesList = children(axesMask);
         end
         function axesIdx = getAxesIdx(obj, ax)
             arguments
@@ -219,7 +269,7 @@ classdef flexfig < handle
                 xAx (1, 1) double
                 yAx (1, 1) double
             end
-            axPosition = flexfig.getPositionInUnits(ax, 'pixels');
+            axPosition = getPositionWithUnits(ax, 'pixels');
             xAxPix = axPosition(1) + xAx * axPosition(3);
             yAxPix = axPosition(2) + yAx * axPosition(4);
             idxInRange = [];
@@ -254,7 +304,7 @@ classdef flexfig < handle
                 ~
             end
             [xFig, yFig] = obj.getFigureCoordinates();
-            [xAx, yAx, inAxes] = obj.getAxesPositions(xFig, yFig);
+%             [xAx, yAx, inAxes] = obj.getAxesPositions(xFig, yFig);
 
             axesList = obj.getAxesList();
 
@@ -285,10 +335,42 @@ classdef flexfig < handle
                     axesList(axesIdx).XLimMode = 'manual';
                     axesList(axesIdx).YLimMode = 'manual';
                 end
-                obj.updatePointer();
+                obj.UpdatePointer();
             end
         end
-        function updatePointer(obj)
+        function HighlightAxes(obj)
+            if obj.HighlightOn
+                return
+            end
+            children = obj.GetChildren();
+            for axesIdx = 1:length(children)
+                try
+                    obj.OriginalChildXColors{axesIdx} = children(axesIdx).XColor;
+                    obj.OriginalChildYColors{axesIdx} = children(axesIdx).YColor;
+                    children(axesIdx).Box = true;
+                    children(axesIdx).XColor = obj.HighlightColor;
+                    children(axesIdx).YColor = obj.HighlightColor;
+                catch
+                end
+            end
+            obj.HighlightOn = true;
+        end
+        function UnHighlightAxes(obj)
+            if ~obj.HighlightOn
+                return;
+            end
+            children = obj.GetChildren();
+            for axesIdx = 1:length(children)
+                try
+                    children(axesIdx).Box = false;
+                    children(axesIdx).XColor = obj.OriginalChildXColors{axesIdx};
+                    children(axesIdx).YColor = obj.OriginalChildYColors{axesIdx};
+                catch
+                end
+            end
+            obj.HighlightOn = false;
+        end
+        function UpdatePointer(obj)
             if ~obj.isControlDown()
                 obj.setPointer();
                 return;
@@ -331,7 +413,7 @@ classdef flexfig < handle
                 snapToGrid (1, 1) logical = obj.SnapToGrid
                 snapToAxes (1, 1) logical = obj.SnapToAxes
             end
-            position = flexfig.getPositionInUnits(obj.Figure, 'pixels');
+            position = getPositionWithUnits(obj.Figure, 'pixels');
             w = position(3);
             h = position(4);
             xSnaps = xFigs;
@@ -408,7 +490,9 @@ classdef flexfig < handle
                 obj.Figure.CurrentAxes = ax;
                 % Rearrange figure Children to put the grabbed axes on top
                 grabAxesIdx = obj.getAxesIdx(ax);
+                warning('off','MATLAB:hg:default_child_strategy:IllegalPermutation')
                 obj.Figure.Children([1, grabAxesIdx]) = obj.Figure.Children([grabAxesIdx, 1]);
+                warning('on','MATLAB:hg:default_child_strategy:IllegalPermutation')
             end
             if ~isempty(anchorIdx)
                 obj.GrabAnchorIndex = anchorIdx;
@@ -451,8 +535,10 @@ classdef flexfig < handle
                         delete(obj.GrabAxes);
                         obj.endGrab();
                     end
+                case 'control'
+                    obj.HighlightAxes();
             end
-            obj.updatePointer();
+            obj.UpdatePointer();
         end
         function KeyReleaseHandler(obj, ~, event)
             % Handle key releases
@@ -462,8 +548,10 @@ classdef flexfig < handle
                 event matlab.ui.eventdata.KeyData
             end
             switch event.Key
+                case 'control'
+                    obj.UnHighlightAxes();
             end
-            obj.updatePointer();
+            obj.UpdatePointer();
         end
     end
     methods (Static, Access = protected)
@@ -479,22 +567,12 @@ classdef flexfig < handle
             xAx = (xFig - axesPosition(1)) / axesPosition(3);
             yAx = (yFig - axesPosition(2)) / axesPosition(4);
         end
-        function position = getPositionInUnits(widget, units)
-            arguments
-                widget matlab.graphics.Graphics
-                units char
-            end
-            originalUnits = widget.Units;
-            widget.Units = units;
-            position = widget.Position;
-            widget.Units = originalUnits;
-        end
         function aspectRatio = getAxesBoundaryAspectRatio(ax)
             % Get the aspect ratio of the given axes
             arguments
                 ax (1, 1) matlab.graphics.axis.Axes
             end
-            position = flexfig.getPositionInUnits(ax, 'pixels');
+            position = getPositionWithUnits(ax, 'pixels');
             aspectRatio = position(3) / position(4);
         end
         function pixelsPerDataUnit = getPixelsPerDataUnit(ax)
@@ -503,7 +581,7 @@ classdef flexfig < handle
             arguments
                 ax (1, 1) matlab.graphics.axis.Axes
             end
-            position = flexfig.getPositionInUnits(ax, 'pixels');
+            position = getPositionWithUnits(ax, 'pixels');
             pixelsPerDataUnit = position(3:4) ./ [diff(xlim(ax)), diff(ylim(ax))];
         end
         function [value, found, args] = extractNameValue(args, name)
@@ -515,6 +593,20 @@ classdef flexfig < handle
                 value = args{idx+1};
                 found = true;
                 args(idx:idx+1) = [];
+            end
+        end
+        function xc = GetChildXColor(c)
+            if isprop('XColor', c)
+                xc = c.XColor;
+            else
+                xc = [];
+            end
+        end
+        function xc = GetChildYColor(c)
+            if isprop('YColor', c)
+                xc = c.YColor;
+            else
+                xc = [];
             end
         end
     end
