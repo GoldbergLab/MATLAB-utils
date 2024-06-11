@@ -1,4 +1,4 @@
-function lines = readlines(filePath, lineSeparator)
+function lines = readlines2(filePath, lineSeparator)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % readlines: read a text file and output the text split by lines
 % usage:  lines = readlines(filePath)
