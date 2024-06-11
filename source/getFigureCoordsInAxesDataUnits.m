@@ -31,7 +31,7 @@ function position = getFigureCoordsInAxesDataUnits(coords, ax, fig, options)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
-    coords (1, :) numerictype
+    coords (1, :) double
     ax (1, 1) matlab.graphics.axis.Axes = gca()
     fig (1, 1) matlab.ui.Figure = ancestor(ax, 'matlab.ui.Figure')
     options.FigureUnits = fig.Units
