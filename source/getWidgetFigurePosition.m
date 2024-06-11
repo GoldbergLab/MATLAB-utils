@@ -20,8 +20,9 @@ function position = getWidgetFigurePosition(widget, units)
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if ~exist('units', 'var') || isempty(units)
-    units = 'pixels';
+arguments
+    widget (1, 1) matlab.graphics.Graphics
+    units (1, :) char {mustBeMember(units, {'pixels', 'normalized', 'inches', 'centimeters', 'points', 'characters'})} = 'pixels'
 end
 
 % Get a reference to the parent widget
