@@ -117,6 +117,13 @@ classdef uitable2 < handle
         end
 
         %% Other methods
+        function UpdateColumnSelectable(obj)
+            if length(obj.ColumnSelectable) > obj.NumColumns
+                obj.ColumnSelectable = obj.ColumnSelectable(1:obj.NumColumns);
+            elseif length(obj.ColumnSelectable) < obj.NumColumns
+                obj.ColumnSelectable = [obj.ColumnSelectable, false(1, obj.NumColumns - length(obj.ColumnSelectable))];
+            end
+        end
         function UpdateBackgroundColorSize(obj)
             % Ensure BackgroundColor has the same # of rows as the data
             numRows = obj.Size(1);
@@ -330,6 +337,7 @@ classdef uitable2 < handle
             obj.Selection = []; %#ok<*MCSUP> 
             obj.UITable.Data = value; 
             obj.UpdateBackgroundColor();
+            obj.UpdateColumnSelectable();
         end
         
         function set.ColumnName(obj, value)
