@@ -1,18 +1,18 @@
 function setPositionWithUnits(gobject, position, units, indices)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % setPositionWithUnits: set a graphics object's position in a given unit
-% usage:  setPositionWithUnits(gobject, position, indices, units)
+% usage:  setPositionWithUnits(gobject, position, units, indices)
 %
 % where,
 %    gobject is a graphics object that has the "Position" property
 %    position is a vector of position values in the requested units, where
 %       each element of the position vector will be assigned to the
 %       Position property at the corresponding index in indices
-%    indices is a vector containing one or more numbers from 1 to 4,
-%       representing one or more indices in the gobject's Position property
-%       to assign to.
 %    units is a valid MATLAB graphics position unit (one of 'pixels',
 %       'normalized', 'inches', 'centimeters', 'points', or 'characters'
+%    indices is an optional vector containing one or more numbers from 1 to
+%       4, representing one or more indices in the gobject's Position 
+%       property ([x, y, w, h]) to assign to. Default is 1:4.
 %
 % It is a common task to set the position of a graphics object with a
 %   particular unit, but without actually changing the units of that
