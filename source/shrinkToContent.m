@@ -96,11 +96,11 @@ for k = 1:length(g.Children)
 end
 
 if any(options.Margin ~= 0)
-    position = getPositionWithUnits(g, options.MarginUnits);
-    position = position + [-options.Margin, 2*options.Margin];
-    setPositionWithUnits(g, position, options.MarginUnits);
+    sz = getPositionWithUnits(g, options.MarginUnits, 3:4);
+    sz = sz + 2*options.Margin;
+    setPositionWithUnits(g, sz, options.MarginUnits, 3:4);
     for k = 1:length(g.Children)
-        changePositionWithUnits(g.Children(k), options.Margin, options.MarginUnits, [1, 2]);
+        changePositionWithUnits(g.Children(k), options.Margin, options.MarginUnits, 1:2);
     end
 end
 
