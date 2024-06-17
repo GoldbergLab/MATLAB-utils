@@ -29,7 +29,7 @@ function position = getPositionWithUnits(gobject, units, indices)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
     gobject
-    units (1, :) char {mustBeMember(units, {'pixels', 'normalized', 'inches', 'centimeters', 'points', 'characters'})}
+    units {mustBeTextScalar, mustBeGraphicsUnit}
     indices double = 1:4
 end
 

@@ -29,7 +29,7 @@ function changePositionWithUnits(gobject, positionDelta, units, indices)
 arguments
     gobject
     positionDelta (1, :) double
-    units (1, :) char {mustBeMember(units, {'pixels', 'normalized', 'inches', 'centimeters', 'points', 'characters'})}
+    units {mustBeTextScalar, mustBeGraphicsUnit}
     indices double = 1:4
 end
 

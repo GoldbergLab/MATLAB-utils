@@ -44,12 +44,15 @@ if length(options.Margin) == 1
     options.Margin = [options.Margin, options.Margin];
 end
 
-% Store the original child units so we can restore it later
-originalUnits = {g.Children.Units};
+% Store the original child units so we can restore it later (have to use
+%   arrayfun in case children are not all the same type).
+originalUnits = arrayfun(@(c)c.Units, g.Children, 'UniformOutput', false);
 % Set children to normalized units
 set(g.Children, 'Units', 'normalized');
-% Get all child positions
-positions = vertcat(g.Children.(options.PositionType));
+% Get all child positions (have to use arrayfun in case children are not
+%   all the same type)
+positions = arrayfun(@(c)c.(options.PositionType), g.Children, 'UniformOutput', false);
+positions = vertcat(positions{:});
 % Find the coordinates of the bounding box for all the children.
 x0 = positions(:, 1);
 y0 = positions(:, 2);
