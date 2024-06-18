@@ -38,7 +38,9 @@ arguments
     options.Orientation (1, :) char {mustBeMember(options.Orientation, {'upwards', 'downwards'})} = 'downwards'
 end
 
-positions = vertcat(children.Position);
+% Have to use arrayfun in case child array is heterogeneous
+positions = arrayfun(@(c)c.Position, children, 'UniformOutput', false);
+positions = vertcat(positions{:});
 
 switch options.Direction
     case 'horizontal'
@@ -64,14 +66,14 @@ end
 
 children = children(sortOrder);
 
-units = parent.Units;
+commonUnits = 'pixels';
 
-setPositionWithUnits(children(1), 0, units, positionIdx);
+setPositionWithUnits(children(1), 0, commonUnits, positionIdx);
 
 for childIdx = 2:length(children)
     lastChildIdx = childIdx - 1;
-    lastCoordinate = getPositionWithUnits(children(lastChildIdx), units, positionIdx);
-    lastSize= getPositionWithUnits(children(lastChildIdx), units, sizeIdx);
+    lastCoordinate = getPositionWithUnits(children(lastChildIdx), commonUnits, positionIdx);
+    lastSize = getPositionWithUnits(children(lastChildIdx), commonUnits, sizeIdx);
     newCoordinate = lastCoordinate + lastSize + options.Margin;
-    setPositionWithUnits(children(childIdx), newCoordinate, units, positionIdx);
+    setPositionWithUnits(children(childIdx), newCoordinate, commonUnits, positionIdx);
 end
