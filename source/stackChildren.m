@@ -32,7 +32,7 @@ function stackChildren(parent, children, options)
 arguments
     parent matlab.graphics.Graphics
     children matlab.graphics.Graphics = parent.Children
-    options.Margin (1, 1) double = 10;                      % Size in pixels of the margin between widgets
+    options.Margin (1, 1) double = 0;                      % Size in pixels of the margin between widgets
     options.Direction (1, :) char {mustBeMember(options.Direction, {'horizontal', 'vertical'})} = 'vertical'
     options.SortOrder (1, :) char {mustBeMember(options.SortOrder, {'given', 'current'})} = 'current'
     options.Orientation (1, :) char {mustBeMember(options.Orientation, {'upwards', 'downwards'})} = 'downwards'

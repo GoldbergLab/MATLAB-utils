@@ -35,7 +35,7 @@ arguments
     g
     options.Margin (1, :) double = [0, 0]
     options.MarginUnits = 'pixels'
-    options.PositionType (1, :) char {mustBeMember(options.PositionType, {'Position', 'InnerPosition', 'OuterPosition'})} = 'Position'
+    options.PositionType (1, :) char {mustBeMember(options.PositionType, {'Position', 'InnerPosition', 'OuterPosition'})} = 'InnerPosition'
     options.ShrinkX = true
     options.ShrinkY = true
 end
@@ -44,14 +44,16 @@ if length(options.Margin) == 1
     options.Margin = [options.Margin, options.Margin];
 end
 
-% Store the original child units so we can restore it later (have to use
-%   arrayfun in case children are not all the same type).
-originalUnits = arrayfun(@(c)c.Units, g.Children, 'UniformOutput', false);
+% Store the original child & parent units so we can restore it later (have 
+%   to use arrayfun in case children are not all the same type).
+originalChildUnits = arrayfun(@(c)c.Units, g.Children, 'UniformOutput', false);
+originalParentUnits = g.Units;
 % Set children to normalized units
-set(g.Children, 'Units', 'normalized');
+set(g.Children, 'Units', 'pixels');
+g.Units = 'pixels';
 % Get all child positions (have to use arrayfun in case children are not
 %   all the same type)
-positions = arrayfun(@(c)c.(options.PositionType), g.Children, 'UniformOutput', false);
+positions = arrayfun(@(c)c.Position, g.Children, 'UniformOutput', false);
 positions = vertcat(positions{:});
 % Find the coordinates of the bounding box for all the children.
 x0 = positions(:, 1);
@@ -64,38 +66,42 @@ y0 = min(y0);
 x1 = max(x1);
 y1 = max(y1);
 
+if strcmp(options.PositionType, 'InnerPosition')
+    % Adjust to make coordinate relative to inner position
+    xInnerMargin = [g.InnerPosition(1) - g.Position(1), g.Position(1) + g.Position(3) - (g.InnerPosition(1) + g.InnerPosition(3))];
+    yInnerMargin = [g.InnerPosition(2) - g.Position(2), g.Position(2) + g.Position(4) - (g.InnerPosition(2) + g.InnerPosition(4))];
+else
+    xInnerMargin = [0, 0];
+    yInnerMargin = [0, 0];
+end
+
+% Get the necessary bounding box width/height
+width = (x1 - x0);
+height = (y1 - y0);
+
 % Loop over children
 for k = 1:length(g.Children)
     % Translate children so their bounding box is in the lower left corner
     % of the container
-    g.Children(k).Position(1) = g.Children(k).Position(1) - x0;
-    g.Children(k).Position(2) = g.Children(k).Position(2) - y0;
+    g.Children(k).Position(1) = g.Children(k).Position(1) - x0 + xInnerMargin(1);
+    g.Children(k).Position(2) = g.Children(k).Position(2) - y0 + yInnerMargin(1);
     % Set units to pixels so the children don't changes size when we shrink
     % the container
     g.Children(k).Units = 'pixels';
 end
 
-% Get the bounding box width/height
-width = x1 - x0;
-height = y1 - y0;
-
 % Shrink the container horizontally
 if options.ShrinkX
-    g.Position(3) = g.Position(3) * width;
+    g.Position(3) = width + sum(xInnerMargin);
 else
     options.Margin(1) = 0;
 end
 
 % Shrink the container vertically
 if options.ShrinkY
-    g.Position(4) = g.Position(4) * height;
+    g.Position(4) = height + sum(yInnerMargin);
 else
     options.Margin(2) = 0;
-end
-
-% Restore the child units
-for k = 1:length(g.Children)
-    g.Children(k).Units = originalUnits{k};
 end
 
 if any(options.Margin ~= 0)
@@ -107,3 +113,8 @@ if any(options.Margin ~= 0)
     end
 end
 
+% Restore the child and parent units
+for k = 1:length(g.Children)
+    g.Children(k).Units = originalChildUnits{k};
+end
+g.Units = originalParentUnits;

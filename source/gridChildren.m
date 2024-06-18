@@ -17,10 +17,14 @@ function gridChildren(gridLayout, children, options)
 %    The following Name/Value arguments:
 %       ColumnWidths: Either a single number or a 1xN array of numbers
 %           representing either the desired width of all columns or of each
-%           column individually, in the units specified by ColumnUnits
+%           column individually, in the units specified by ColumnUnits. If
+%           omitted, each column will be sized according to the largest
+%           object assigned to it.
 %       RowHeights: Either a single number or a 1xM array of numbers
 %           representing either the desired height of all rows or of each
-%           row individually, in the units specified by RowUnits
+%           row individually, in the units specified by RowUnits. If
+%           omitted, each row will be sized according to the largest
+%           object assigned to it.
 %       ColumnUnits: Either a single string/char array representing a valid
 %           MATLAB graphics unit, or a 1xN cell array of them, representing
 %           the units for ColumnWidths and ColumnMargins
@@ -59,12 +63,12 @@ function gridChildren(gridLayout, children, options)
 arguments
     gridLayout {mustBeA(gridLayout, {'matlab.graphics.Graphics', 'double'})}
     children matlab.graphics.Graphics = gobjects().empty
-    options.ColumnWidths double = 1
-    options.RowHeights double = 1
+    options.ColumnWidths double = NaN
+    options.RowHeights double = NaN
     options.ColumnUnits = 'inches'
     options.RowUnits = 'inches'
-    options.ColumnMargins = 0.1
-    options.RowMargins = 0.1
+    options.ColumnMargins = 0
+    options.RowMargins = 0
 end
 
 if any(isgraphics(gridLayout), 'all')
@@ -104,16 +108,21 @@ numRows = size(gridLayout, 1);
 numColumns = size(gridLayout, 2);
 
 childCoords = cell(numChildren, 2);
+columnSpans = zeros(1, numChildren);
+rowSpans = zeros(1, numChildren);
 
-% Make sure this is a valid grid layout:
+% Make sure this is a valid grid layout, and extract row and column ranges
+% for each child
 for k = 1:length(children)
     [xCoords, yCoords] = ind2sub(size(gridLayout), find(gridLayout == k));
-    [isRect, xRange, yRange] = isFilledRectangle(xCoords, yCoords);
-    childCoords{k, 1} = xRange;
-    childCoords{k, 2} = yRange;
+    [isRect, yRange, xRange] = isFilledRectangle(xCoords, yCoords);
     if ~isRect
         error('Invalid grid layout - make sure each child object is represented by a single solid rectangle within the gridLayout');
     end
+    childCoords{k, 1} = yRange;
+    childCoords{k, 2} = xRange;
+    columnSpans(k) = diff(xRange) + 1;
+    rowSpans(k) = diff(yRange) + 1;
 end
 
 if ischar(columnUnits)
@@ -149,20 +158,46 @@ for k = 1:numRows
     rowMargins(k) = getPositionWithUnits(dummyElement, parent.Units, 4);
 end
 
+% Determine edge positions of columns and rows
 columnXs = zeros(numColumns, 2) + columnMargins(1);
 rowYs =    zeros(numRows, 2) + rowMargins(1);
+resizeToColumn = false(1, numColumns);
+resizeToRow = false(1, numRows);
+
 lastColumnX = 0;
 for k = 1:numColumns
-    setPositionWithUnits(dummyElement, columnWidths(k), columnUnits{k}, 3);
-    columnWidths(k) = getPositionWithUnits(dummyElement, parent.Units, 3);
+    if ~isnan(columnWidths(k))
+        % Determine width based on requested column widths/units
+        resizeToColumn(k) = true;
+        setPositionWithUnits(dummyElement, columnWidths(k), columnUnits{k}, 3);
+        columnWidths(k) = getPositionWithUnits(dummyElement, parent.Units, 3);
+    else
+        % Determine width based on existing sizes of children
+        notEmptyMask = gridLayout(:, k) > 0;
+        childIdxInColumn = unique(gridLayout(notEmptyMask, k));
+        childrenInColumn = children(childIdxInColumn);
+        childWidths = arrayfun(@(c)getPositionWithUnits(c, parent.Units, 3), childrenInColumn);
+        columnWidths(k) = max(childWidths ./ columnSpans(childIdxInColumn), [], 'all');
+    end
     columnXs(k, 1) = lastColumnX + columnMargins(k);  % X of left side of column k
     columnXs(k, 2) = lastColumnX + columnMargins(k) + columnWidths(k);  % X of right side of column k
     lastColumnX = columnXs(k, 2);
 end
 lastRowY = 0;
 for k = 1:numRows
-    setPositionWithUnits(dummyElement, rowHeights(k), rowUnits{k}, 4);
-    rowHeights(k) = getPositionWithUnits(dummyElement, parent.Units, 4);
+    if ~isnan(rowHeights(k))
+        % Determine height based on requested row heights/units
+        resizeToRow(k) = true;
+        setPositionWithUnits(dummyElement, rowHeights(k), rowUnits{k}, 4);
+        rowHeights(k) = getPositionWithUnits(dummyElement, parent.Units, 4);
+    else
+        % Determine width based on existing sizes of children
+        notEmptyMask = gridLayout(k, :) > 0;
+        childIdxInRow = unique(gridLayout(k, notEmptyMask));
+        childrenInRow = children(childIdxInRow);
+        childHeights = arrayfun(@(c)getPositionWithUnits(c, parent.Units, 4), childrenInRow);
+        rowHeights(k) = max(childHeights ./ rowSpans(childIdxInRow), [], 'all');
+    end
     rowYs(k, 1) = lastRowY + rowMargins(k);  % Y of bottom side of row k
     rowYs(k, 2) = lastRowY + rowMargins(k) + rowHeights(k);  % Y of top side of row k
     lastRowY = rowYs(k, 2);
@@ -179,13 +214,26 @@ for k = 1:numChildren
     y = rowYs(startRow, 1);
     x2 = columnXs(endColumn, 2);
     y2 = rowYs(endRow, 2);
-    w = x2 - x;
-    h = y2 - y;
-    setPositionWithUnits(children(k), [x, w], parent.Units, [1, 3]);
-    setPositionWithUnits(children(k), [y, h], parent.Units, [2, 4]);
+    if any(resizeToColumn(startColumn:endColumn))
+        w = x2 - x;
+        setPositionWithUnits(children(k), [x, w], parent.Units, [1, 3]);
+    else
+        w = getPositionWithUnits(children(k), parent.Units, 3);
+        x = (x + x2)/2 - w/2;
+        setPositionWithUnits(children(k), [x, w], parent.Units, [1, 3]);
+    end
+    if any(resizeToRow(startRow:endRow))
+        h = y2 - y;
+        setPositionWithUnits(children(k), [y, h], parent.Units, [2, 4]);
+    else
+        h = getPositionWithUnits(children(k), parent.Units, 4);
+        y = (y + y2)/2 - h/2;
+        setPositionWithUnits(children(k), [y, h], parent.Units, [2, 4]);
+    end
 end
 
 end
+
 function [isRect, xRange, yRange] = isFilledRectangle(xCoords, yCoords)
     xMin = min(xCoords);
     xMax = max(xCoords);
