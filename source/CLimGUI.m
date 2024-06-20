@@ -1,10 +1,12 @@
 classdef CLimGUI < handle
     properties
-        CLim                        (1, 2) double
+        CLim                        (1, 2) double = [0, 1]
         ParentFigure                matlab.ui.Figure
+        ClimChangedCallback         (1, 1) function_handle = @NOP
     end
     properties (Access = protected)
         Image                       matlab.graphics.primitive.Image
+        ImageFunction               function_handle
         ImageAxes                   matlab.graphics.axis.Axes
         HistogramAxes               matlab.graphics.axis.Axes
         HistogramHighlight
@@ -18,12 +20,18 @@ classdef CLimGUI < handle
         IsSelectingCLim             logical
         BoundsToText                function_handle = @(bound)sprintf('%.03f', bound)
     end
+    properties (Dependent)
+        Visible                     (1, 1) logical
+    end
     methods
-        function obj = CLimGUI(imageOrAxes, parent_figure)
+        function obj = CLimGUI(imageOrAxes, parent_figure, options)
             arguments
-                imageOrAxes matlab.graphics.Graphics
+                imageOrAxes {mustBeA(imageOrAxes, {'matlab.graphics.Graphics', 'function_handle'})} 
                 parent_figure matlab.ui.Figure = matlab.ui.Figure.empty()
+                options.ClimChangedCallback function_handle = @NOP
+                options.Visible = true
             end
+            obj.ClimChangedCallback = options.ClimChangedCallback;
             switch class(imageOrAxes)
                 case 'matlab.graphics.primitive.Image'
                     obj.Image = imageOrAxes;
@@ -37,8 +45,11 @@ classdef CLimGUI < handle
                     else
                         obj.Image = obj.ImageAxes.Children(imageIndex);
                     end
+                case 'function_handle'
+                    obj.ImageFunction = imageOrAxes;
+                    obj.ImageAxes = obj.Image.Parent;
                 otherwise
-                    error('imageOrAxes should either be a handle for an image or axes')
+                    error('imageOrAxes should either be a handle for an image or axes or a function that retrieves an image or axes')
             end
 
             if ~exist('parent_figure', 'var') || isempty(parent_figure)
@@ -46,7 +57,7 @@ classdef CLimGUI < handle
                 GUI_width = 175;
                 GUI_height = 100;
                 fig_position = [ax_position(1) + ax_position(3) - GUI_width, ax_position(2) + ax_position(4), GUI_width, GUI_height];
-                obj.ParentFigure = figure("Units", "pixels", "Position", fig_position, "MenuBar", "none", "DockControls", "off", "ToolBar", "none", "Name", "CLim GUI", "NumberTitle", "off");
+                obj.ParentFigure = figure("Units", "pixels", "Position", fig_position, "MenuBar", "none", "DockControls", "off", "ToolBar", "none", "Name", "CLim GUI", "NumberTitle", "off", "Visible", options.Visible);
             else
                 obj.ParentFigure = parent_figure;
             end
@@ -65,7 +76,7 @@ classdef CLimGUI < handle
             obj.BoundEntries(1) =          uicontrol("Parent", obj.ControlPanel, "Style", "edit", "String", '', "Units", "normalized",        "Position", [0.250, 0.000, 0.250, 1.000], "Callback", @(~, ~)obj.CLimChangeHandler());
             obj.BoundEntries(2) =          uicontrol("Parent", obj.ControlPanel, "Style", "edit", "String", '', "Units", "normalized",        "Position", [0.500, 0.000, 0.250, 1.000], "Callback", @(~, ~)obj.CLimChangeHandler());
             obj.HistogramAxes = axes(obj.ParentFigure);
-            if isempty(obj.Image)
+            if ~isvalid(obj.Image) || isempty(obj.Image)
                 obj.ControlPanel.Position =  [0.000, 0.000, 1.000, 1.000];
                 obj.HistogramAxes.Visible = "off";
             else
@@ -76,13 +87,22 @@ classdef CLimGUI < handle
             obj.UpdateHistogram();
             obj.UpdateHistogramHighlight();
         end
+        function image = get.Image(obj)
+            if ~isempty(obj.ImageFunction)
+                % Update image from image function if it exists
+                obj.Image = obj.ImageFunction();
+            end
+            image = obj.Image;
+        end
         function AlterCLim(obj, bound, amount)
             obj.BoundEntries(bound).String = obj.BoundsToText(str2double(obj.BoundEntries(bound).String) + amount);
             obj.SanitizeCLim();
             obj.CLimChangeHandler();
         end
         function SetCLim(obj, bound, value)
-            obj.BoundEntries(bound).String = obj.BoundsToText(value);
+            for k = 1:length(bound)
+                obj.BoundEntries(bound(k)).String = obj.BoundsToText(value(k));
+            end
             obj.SanitizeCLim();
             obj.CLimChangeHandler();
         end
@@ -114,14 +134,14 @@ classdef CLimGUI < handle
             end
         end
         function UpdateCLimFromAxes(obj)
-            obj.BoundEntries(1).String = sprintf('%.03f', obj.ImageAxes.CLim(1));
-            obj.BoundEntries(2).String = sprintf('%.03f', obj.ImageAxes.CLim(2));
+            obj.SetCLim(1:2, obj.ImageAxes.CLim);
         end
         function CLimChangeHandler(obj)
             obj.CLim = obj.GetCLim();
             obj.UpdateHistogram();
             obj.UpdateHistogramHighlight();
             obj.ApplyCLimToAxes();
+            obj.ClimChangedCallback(obj.CLim);
         end
         function ApplyCLimToAxes(obj)
             new_clim = [str2double(obj.BoundEntries(1).String), str2double(obj.BoundEntries(2).String)];
@@ -203,6 +223,12 @@ classdef CLimGUI < handle
                     clipboard('copy', sprintf('[%s, %s]', obj.BoundEntries(1).String, obj.BoundEntries(2).String));
                 end
             end
+        end
+        function set.Visible(obj, visible)
+            obj.ParentFigure.Visible = visible;
+        end
+        function visible = get.Visible(obj)
+            visible = obj.ParentFigure.Visible;
         end
     end
 end
