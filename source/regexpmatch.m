@@ -19,5 +19,8 @@ function matches = regexpmatch(cell_arr, expression)
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-matches = cellfun(@(match)~isempty(match), regexp(cell_arr, expression));
+if isempty(cell_arr)
+    matches = logical.empty();
+else
+    matches = cellfun(@(match)~isempty(match), regexp(cell_arr, expression));
+end
