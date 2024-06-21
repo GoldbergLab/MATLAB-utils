@@ -61,7 +61,7 @@ switch options.SortOrder
 end
 
 if strcmp(options.Orientation, 'downwards')
-    sortOrder = reverse(sortOrder);
+    sortOrder = fliplr(sortOrder);
 end
 
 children = children(sortOrder);
