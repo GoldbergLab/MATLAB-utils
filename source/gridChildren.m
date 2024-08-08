@@ -25,6 +25,14 @@ function gridChildren(gridLayout, children, options)
 %           row individually, in the units specified by RowUnits. If
 %           omitted, each row will be sized according to the largest
 %           object assigned to it.
+%       FitToWidth: Logical indicating whether or not to size columns so
+%           the grid fills the entire width of the parent container. If 
+%           true, provided ColumnWidths and ColumnMargins will be scaled 
+%           down to fit. Default is false.
+%       FitToHeight: Logical indicating whether or not to size rows so
+%           the grid fills the entire height of the parent container. If 
+%           true, provided RowWidths and RowMargins will be scaled down to 
+%           fit. Default is false.
 %       ColumnUnits: Either a single string/char array representing a valid
 %           MATLAB graphics unit, or a 1xN cell array of them, representing
 %           the units for ColumnWidths and ColumnMargins
@@ -65,6 +73,8 @@ arguments
     children matlab.graphics.Graphics = gobjects().empty
     options.ColumnWidths double = NaN
     options.RowHeights double = NaN
+    options.FitToWidth logical = false
+    options.FitToHeight logical = false
     options.ColumnUnits = 'inches'
     options.RowUnits = 'inches'
     options.ColumnMargins = 0
@@ -97,6 +107,8 @@ columnUnits = options.ColumnUnits;
 rowUnits = options.RowUnits;
 columnMargins = options.ColumnMargins;
 rowMargins = options.RowMargins;
+fitToWidth = options.FitToWidth;
+fitToHeight = options.FitToHeight;
 
 parent = unique([children.Parent]);
 if length(parent) ~= 1
@@ -137,6 +149,7 @@ end
 if length(rowHeights) == 1
     rowHeights = repmat(rowHeights, 1, numRows);
 end
+
 if length(columnMargins) == 1
     columnMargins = repmat(columnMargins, 1, numColumns+1);
 end
@@ -149,12 +162,12 @@ end
 % top/right side of the last row/column
 dummyElement = uipanel(parent, 'Visible', false);
 
-for k = 1:numColumns
-    setPositionWithUnits(dummyElement, columnMargins(k), columnUnits{k}, 3);
+for k = 1:numColumns+1
+    setPositionWithUnits(dummyElement, columnMargins(k), columnUnits{min(k, numColumns)}, 3);
     columnMargins(k) = getPositionWithUnits(dummyElement, parent.Units, 3);
 end
-for k = 1:numRows
-    setPositionWithUnits(dummyElement, rowMargins(k), rowUnits{k}, 4);
+for k = 1:numRows+1
+    setPositionWithUnits(dummyElement, rowMargins(k), rowUnits{min(k, numRows)}, 4);
     rowMargins(k) = getPositionWithUnits(dummyElement, parent.Units, 4);
 end
 
@@ -205,6 +218,31 @@ end
 
 delete(dummyElement);
 
+if fitToHeight
+    % User requested fit to width - determine total parent height
+    switch parent.Units
+        case 'normalized'
+            totalSize = 1;
+        otherwise
+            totalSize = parent.Position(4);
+    end
+    % Scale row heights
+    rowScale = (totalSize / (max(rowYs(:) - min(rowYs(:))) + 2*rowMargins(end)));
+    rowYs = rowYs * rowScale;
+end
+if fitToWidth
+    % User requested fit to width - determine total parent width
+    switch parent.Units
+        case 'normalized'
+            totalSize = 1;
+        otherwise
+            totalSize = parent.Position(3);
+    end
+    % Scale column widths
+    columnScale = (totalSize / (max(columnXs(:) - min(columnXs(:))) + 2*columnMargins(end)));
+    columnXs = columnXs * columnScale;
+end
+
 for k = 1:numChildren
     startColumn = childCoords{k, 2}(1);
     endColumn = childCoords{k, 2}(2);
@@ -214,22 +252,22 @@ for k = 1:numChildren
     y = rowYs(startRow, 1);
     x2 = columnXs(endColumn, 2);
     y2 = rowYs(endRow, 2);
-    if any(resizeToColumn(startColumn:endColumn))
+
+    w = getPositionWithUnits(children(k), parent.Units, 3);
+    if any(resizeToColumn(startColumn:endColumn)) || w > (x2 - x)
         w = x2 - x;
-        setPositionWithUnits(children(k), [x, w], parent.Units, [1, 3]);
     else
-        w = getPositionWithUnits(children(k), parent.Units, 3);
         x = (x + x2)/2 - w/2;
-        setPositionWithUnits(children(k), [x, w], parent.Units, [1, 3]);
     end
-    if any(resizeToRow(startRow:endRow))
+    setPositionWithUnits(children(k), [x, w], parent.Units, [1, 3]);
+
+    h = getPositionWithUnits(children(k), parent.Units, 4);
+    if any(resizeToRow(startRow:endRow)) || h > (y2 - y)
         h = y2 - y;
-        setPositionWithUnits(children(k), [y, h], parent.Units, [2, 4]);
     else
-        h = getPositionWithUnits(children(k), parent.Units, 4);
         y = (y + y2)/2 - h/2;
-        setPositionWithUnits(children(k), [y, h], parent.Units, [2, 4]);
     end
+    setPositionWithUnits(children(k), [y, h], parent.Units, [2, 4]);
 end
 
 end
