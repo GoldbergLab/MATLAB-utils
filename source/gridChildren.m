@@ -101,6 +101,11 @@ else
             'provided list of children']);
     end
 end
+
+% Flip grid layout so widgets appear in the same vertical order as if the 
+% gridLayout var were printed to the console.
+gridLayout = flipud(gridLayout);
+
 columnWidths = options.ColumnWidths;
 rowHeights = options.RowHeights;
 columnUnits = options.ColumnUnits;
