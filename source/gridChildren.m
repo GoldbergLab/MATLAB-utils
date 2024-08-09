@@ -75,8 +75,8 @@ arguments
     options.RowHeights double = NaN
     options.FitToWidth logical = false
     options.FitToHeight logical = false
-    options.ColumnUnits = 'inches'
-    options.RowUnits = 'inches'
+    options.ColumnUnits {mustBeGraphicsUnit} = 'inches'
+    options.RowUnits {mustBeGraphicsUnit} = 'inches'
     options.ColumnMargins = 0
     options.RowMargins = 0
 end
@@ -142,10 +142,10 @@ for k = 1:length(children)
     rowSpans(k) = diff(yRange) + 1;
 end
 
-if ischar(columnUnits)
+if istext(columnUnits)
     columnUnits = repmat({columnUnits}, 1, numColumns);
 end
-if ischar(rowUnits)
+if istext(rowUnits)
     rowUnits = repmat({rowUnits}, 1, numRows);
 end
 if length(columnWidths) == 1

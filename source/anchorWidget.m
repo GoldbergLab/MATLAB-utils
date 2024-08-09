@@ -1,4 +1,4 @@
-function anchorWidget(widget1, anchorPoint1, widget2, anchorPoint2)
+function anchorWidget(widget1, anchorPoint1, widget2, anchorPoint2, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % anchorWidget: Anchor one widget to another
 % usage: anchorWidget(widget1, anchorPoint1, widget2, anchorPoint2)
@@ -29,6 +29,7 @@ arguments
     anchorPoint1 {mustBeMember(anchorPoint1, {'NW', 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'C'})}
     widget2 matlab.graphics.Graphics
     anchorPoint2 {mustBeMember(anchorPoint2, {'NW', 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'C'})}
+    options.Offset = [0, 0]
 end
 
 commonUnit = 'inches';
@@ -79,8 +80,37 @@ for k = 1:2
     end
 end
 
+
 % Determine how much to move widget1 to anchor anchorPoint1 to anchorPoint2
 delta = diff(anchorPositions(:, 1:2));
 
 % Move widget1
 changePositionWithUnits(widget1, delta, commonUnit, [1, 2]);
+
+if any(options.Offset)
+    % Adjust offset sign so positive = further away
+    switch anchorPoints{2}
+        case 'NW'
+            offsetDirections = [-1, 1];
+        case 'N'
+            offsetDirections = [0, 1];
+        case 'NE'
+            offsetDirections = [1, 1];
+        case 'E'
+            offsetDirections = [1, 0];
+        case 'SE'
+            offsetDirections = [1, -1];
+        case 'S'
+            offsetDirections = [0, -1];
+        case 'SW'
+            offsetDirections = [-1, -1];
+        case 'W'
+            offsetDirections = [-1, 0];
+        case 'C'
+            offsetDirections = [0, 0];
+    end
+    options.Offset = options.Offset .* offsetDirections;
+
+    % Apply offset
+    changePositionWithUnits(widget1, options.Offset, widget1.Units, [1, 2]);
+end
