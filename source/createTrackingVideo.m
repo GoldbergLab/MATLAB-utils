@@ -73,7 +73,7 @@ end
 % 'C:\Users\briankardon\Downloads\pixfmttest_22138014_2022-10-14-14-10-17-477486_686_merged.avi'
 % 'C:\Users\briankardon\Downloads\ROIs\pixfmttest_22138014_2022-10-14-14-10-17-477486_686_merged_ROI.mat'
 
-if ischar(videoPathOrData)
+if istext(videoPathOrData)
     % User must have provided a video path - load it
     videoData = loadVideoData(videoPathOrData);
 else
