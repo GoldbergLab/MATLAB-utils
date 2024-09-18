@@ -11,6 +11,8 @@ classdef VideoReaderAsync < handle
         NumChannels double {mustBeInteger, mustBeGreaterThan(NumChannels, 0)} = []
         NumFrames double {mustBeInteger, mustBeGreaterThan(NumFrames, 0)} = []
         Verbosity {mustBeText, mustBeMember(Verbosity, {'silent', 'error', 'warning', 'info'})} = 'warning'
+        NewDataLoadedCallback function_handle = @NOP
+        AllDataLoadedCallback function_handle = @NOP
     end
     properties (Access = private)
         DataBuffer = uint8.empty
@@ -27,6 +29,8 @@ classdef VideoReaderAsync < handle
                 options.Async logical = true;
                 options.ProgressBar logical = false;
                 options.Verbosity char {mustBeText, mustBeMember(options.Verbosity, {'silent', 'error', 'warning', 'info'})} = 'warning'
+                options.NewDataLoadedCallback function_handle = @NOP
+                options.AllDataLoadedCallback function_handle = @NOP
             end
 
             obj.Verbosity = options.Verbosity;
@@ -40,6 +44,9 @@ classdef VideoReaderAsync < handle
             if ffprobeStatus ~= 0
                 error('To use VideoReaderAsync, ffprobe must be installed and available on the system path. See https://ffmpeg.org/download.html.');
             end
+
+            obj.NewDataLoadedCallback = options.NewDataLoadedCallback;
+            obj.AllDataLoadedCallback = options.AllDataLoadedCallback;
 
             obj.ProgressBarEnabled = options.ProgressBar;
 
@@ -106,6 +113,9 @@ classdef VideoReaderAsync < handle
                 waitbar(obj.LoadProgress, obj.ProgressBar, obj.ProgressBarText);
             end
 
+            event.NumNewFrames = numFrames;
+            event.NumFramesLoaded = obj.NumFramesLoaded;
+
             % Add on any extra data after the last frame to the data buffer
             % to be used for the next frame
             obj.DataBuffer = data((numFrames * frameBytes + 1):end);
@@ -117,6 +127,9 @@ classdef VideoReaderAsync < handle
                 if obj.ProgressBarEnabled && isvalid(obj.ProgressBar)
                     close(obj.ProgressBar);
                 end
+                obj.AllDataLoadedCallback(obj, event);
+            else
+                obj.NewDataLoadedCallback(obj, event);
             end
         end
         function loadVideoInfo(obj)
