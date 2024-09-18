@@ -1,10 +1,15 @@
-function videoInfo = getVideoInfo(videoPath)
+function videoInfo = getVideoInfo(videoPath, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % getVideoInfo: get information about a video from file metadata
 % usage:  videoInfo = getVideoInfo(videoPath)
 %
 % where,
 %    videoPath is the path to a video file
+%    The following Name/Value arguments:
+%       SystemCheck: check that ffprobe is available on the system first.
+%           Default is true
+%       FfprobeAvailable: If SystemCheck is false, use this value to
+%           determine whether or not to use ffprobe
 %    videoInfo is a struct containing information about the video with the
 %       following fields:
 %           numFrames (number of frames in the video)
@@ -32,6 +37,11 @@ function videoInfo = getVideoInfo(videoPath)
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+arguments
+    videoPath {mustBeText}
+    options.SystemCheck logical = true
+    options.FfprobeAvailable logical = true
+end
 
 % Initialize video info structure
 videoInfo = struct();
@@ -41,14 +51,18 @@ videoInfo = struct();
 videoInfo.name = [name, ext];
 videoInfo.path = path;
 
-% Check if ffprobe is available on this system. Warn user if not.
-[ffprobeStatus, ~] = system('where /q ffprobe');
-
-if ffprobeStatus ~= 0
-    ffprobeExists = false;
-    warning('No ffprobe found - for full getVideoInfo functionality, ffprobe must be installed and available on the system path. See https://ffmpeg.org/download.html. Basic functionality will be provided through the MATLAB function ''VideoReader''.');
+if options.SystemCheck
+    % Check if ffprobe is available on this system. Warn user if not.
+    [ffprobeStatus, ~] = system('where /q ffprobe');
+    
+    if ffprobeStatus ~= 0
+        ffprobeExists = false;
+        warning('No ffprobe found - for full getVideoInfo functionality, ffprobe must be installed and available on the system path. See https://ffmpeg.org/download.html. Basic functionality will be provided through the MATLAB function ''VideoReader''.');
+    else
+        ffprobeExists = true;
+    end
 else
-    ffprobeExists = true;
+    ffprobeExists = options.FfprobeAvailable;
 end
 
 if ffprobeExists
@@ -116,5 +130,4 @@ else
         videoInfo.numChannels = 1;
     end
     videoInfo.raw_info = struct();
-
 end

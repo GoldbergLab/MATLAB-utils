@@ -38,7 +38,7 @@ classdef VideoReaderAsync < handle
 
             obj.Path = path;
 
-            obj.getVideoInfo();
+            obj.loadVideoInfo();
 
             if options.LoadNow
                 obj.beginLoad();
@@ -94,39 +94,14 @@ classdef VideoReaderAsync < handle
                 obj.Loaded = true;
             end
         end
-        function getVideoInfo(obj)
+        function loadVideoInfo(obj)
             % Get video size using ffprobe
-            [status, cmdout] = system(sprintf('ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -show_entries stream=width,height -of csv=p=0 "%s"  ', obj.Path));
-            if status ~= 0
-                error(cmdout);
-            end
-            ffmpegVideoShape = arrayfun(@str2double, strsplit(strtrim(cmdout), ','));
-            obj.Height = ffmpegVideoShape(1);
-            obj.Width = ffmpegVideoShape(2);
-            obj.NumFrames = ffmpegVideoShape(3);
-            
-            % Attempt to use ffprobe to determine channel count
-            try
-                % Get pix_fmt from video header
-                [status, cmdout] = system(sprintf('ffprobe -v quiet -print_format csv -select_streams v:0 -show_entries stream=pix_fmt "%s"', obj.Path));
-                if status ~= 0
-                    error(cmdout);
-                end
-            catch ME
-                error('Failed to automatically extract number of channels from video using ffprobe.');
-            end
-            output = strsplit(strtrim(cmdout), ',');
-            pix_fmt = output{2};
-            % Get a table of available pix_fmts that match this video's pix_fmt,
-            % along with the # of components it has
-            [status, cmdout] = system(sprintf('ffprobe -v quiet -pix_fmts | find "%s"', pix_fmt));
-            if status ~= 0
-                error(cmdout);
-            end
-            % Get the # of components for the given pix_fmt
-            matches = regexp(cmdout, sprintf('%s\\s+([0-9]+)', pix_fmt), 'tokens');
-            obj.NumChannels = str2double(matches{1}{1});
-            
+            videoInfo = getVideoInfo(obj.Path, 'SystemCheck', false, 'FfprobeAvailable', true);
+
+            obj.Height = videoInfo.width;
+            obj.Width = videoInfo.height;
+            obj.NumFrames = videoInfo.numFrames;
+            obj.NumChannels = videoInfo.numChannels;
         end
         function loaded = get.Loaded(obj)
             if isempty(obj.WorkerFuture)
