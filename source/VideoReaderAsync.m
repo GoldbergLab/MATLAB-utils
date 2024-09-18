@@ -4,16 +4,20 @@ classdef VideoReaderAsync < handle
         AudioData
         Path {mustBeTextScalar} = ''
         LoadProgress double = 0
+        NumFramesLoaded double = 0
         Loaded logical = false
         Width double {mustBeInteger, mustBeGreaterThan(Width, 0)} = []
         Height double {mustBeInteger, mustBeGreaterThan(Height, 0)} = []
         NumChannels double {mustBeInteger, mustBeGreaterThan(NumChannels, 0)} = []
         NumFrames double {mustBeInteger, mustBeGreaterThan(NumFrames, 0)} = []
         Verbosity {mustBeText, mustBeMember(Verbosity, {'silent', 'error', 'warning', 'info'})} = 'warning'
-        WorkerFuture parallel.FevalFuture
     end
     properties (Access = private)
         DataBuffer = uint8.empty
+        WorkerFuture parallel.FevalFuture
+        ProgressBar matlab.ui.Figure
+        ProgressBarEnabled logical = false
+        ProgressBarText char = ''
     end
     methods
         function obj = VideoReaderAsync(path, options)
@@ -21,6 +25,7 @@ classdef VideoReaderAsync < handle
                 path {mustBeText}
                 options.LoadNow logical = true;
                 options.Async logical = true;
+                options.ProgressBar logical = false;
                 options.Verbosity char {mustBeText, mustBeMember(options.Verbosity, {'silent', 'error', 'warning', 'info'})} = 'warning'
             end
 
@@ -35,6 +40,8 @@ classdef VideoReaderAsync < handle
             if ffprobeStatus ~= 0
                 error('To use VideoReaderAsync, ffprobe must be installed and available on the system path. See https://ffmpeg.org/download.html.');
             end
+
+            obj.ProgressBarEnabled = options.ProgressBar;
 
             obj.Path = path;
 
@@ -62,10 +69,17 @@ classdef VideoReaderAsync < handle
             afterEach(dataQueue, @obj.receiveFrames);
             afterEach(msgQueue, @(msg)obj.log(msg))
             obj.log('Beginning load');
+            if obj.ProgressBarEnabled
+                if isvalid(obj.ProgressBar)
+                    close(obj.ProgressBar);
+                end
+                obj.ProgressBarText = escapeChars(sprintf('Loading %s', obj.Path), '\', '\');
+                obj.ProgressBar = waitbar(0, obj.ProgressBarText);
+            end
             obj.WorkerFuture = parfeval(@loadVideoAsync, 0, obj.Path, dataQueue, msgQueue, obj.NumFrames, obj.Width, obj.Height, obj.NumChannels);
         end
         function receiveFrames(obj, data)
-            finalFrameShape = [obj.Width, obj.Height, obj.NumChannels];
+            finalVideoShape = [obj.Width, obj.Height, obj.NumChannels, obj.NumFrames];
             frameShape = [obj.NumChannels, obj.Height, obj.Width];
 
             frameBytes = prod(frameShape);
@@ -78,20 +92,31 @@ classdef VideoReaderAsync < handle
                 framesShape = [frameShape, numFrames];
                 if isempty(obj.VideoData)
                     % Initialize obj.VideoData if it's empty
-                    obj.VideoData = uint8.empty([finalFrameShape, 0]);
+                    obj.VideoData = zeros(finalVideoShape, 'uint8'); %uint8.empty([finalFrameShape, 0]);
                 end
                 % Rearrange new frame data to match desired output format
                 newFrames = permute(reshape(data(1:numFrames * frameBytes), framesShape), [3, 2, 1, 4]);
-                % Concatenate the newly received frames
-                obj.VideoData = cat(4, obj.VideoData, newFrames);
+                % Load the newly received frames
+                obj.VideoData(:, :, :, obj.NumFramesLoaded+1:obj.NumFramesLoaded+numFrames) = newFrames;
+                obj.NumFramesLoaded = obj.NumFramesLoaded + numFrames;
             end
+
+            % Update progress bar
+            if obj.ProgressBarEnabled && isvalid(obj.ProgressBar)
+                waitbar(obj.LoadProgress, obj.ProgressBar, obj.ProgressBarText);
+            end
+
             % Add on any extra data after the last frame to the data buffer
             % to be used for the next frame
             obj.DataBuffer = data((numFrames * frameBytes + 1):end);
-            if size(obj.VideoData, 4) == obj.NumFrames
+            if obj.NumFramesLoaded == obj.NumFrames
                 % Done receiving video
                 obj.VideoData = squeeze(obj.VideoData);
                 obj.Loaded = true;
+                % Close progress bar
+                if obj.ProgressBarEnabled && isvalid(obj.ProgressBar)
+                    close(obj.ProgressBar);
+                end
             end
         end
         function loadVideoInfo(obj)
@@ -102,6 +127,13 @@ classdef VideoReaderAsync < handle
             obj.Width = videoInfo.height;
             obj.NumFrames = videoInfo.numFrames;
             obj.NumChannels = videoInfo.numChannels;
+        end
+        function loadProgress = get.LoadProgress(obj)
+            if obj.NumFrames == 0
+                loadProgress = NaN;
+            else
+                loadProgress = obj.NumFramesLoaded / obj.NumFrames;
+            end
         end
         function loaded = get.Loaded(obj)
             if isempty(obj.WorkerFuture)
