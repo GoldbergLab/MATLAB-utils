@@ -116,6 +116,7 @@ classdef VideoBrowser < handle
                 options.NavigationColor = 'black';
                 options.NavigationColormap = colormap();
                 options.NavigationCLim = [13.0000, 24.5000]
+                options.NavigationScrollMode {mustBeMember(options.NavigationScrollMode, {'centered', 'partial', 'sweep', 'none'})} = 'sweep' 
                 options.Title = '';
             end
 
@@ -124,6 +125,7 @@ classdef VideoBrowser < handle
             NavigationColormaps = options.NavigationColormap;
             NavigationCLims = options.NavigationCLim;
             obj.Title = options.Title;
+            obj.NavigationScrollMode = options.NavigationScrollMode;
 
             % We'll need the same # of NavigationDataOrFcn, NavigationColor, NavigationColormap, NavigationCLim
             if ~iscell(NavigationDataOrFcns)
@@ -521,31 +523,17 @@ classdef VideoBrowser < handle
             obj.VideoPanel =        uipanel(obj.MainFigure, 'Units', 'normalized', 'Position', [0, 0, 1, 1]);
             obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized', 'Visible', false);
             obj.NavigationPanel =   uipanel(obj.VideoPanel, 'Units', 'normalized');
-            obj.NavigationAxes = matlab.graphics.axis.Axes.empty(0, obj.getNumNavigationAxes());
-            for axNum = 1:obj.getNumNavigationAxes()
-                obj.NavigationAxes(axNum) =    axes(obj.NavigationPanel, 'Units', 'normalized', 'HitTest', 'on', 'PickableParts', 'all');
-            end
-            % Link x-axis of navigation axes
-            linkaxes(obj.NavigationAxes, 'x');
+            obj.UpdateNavigationAxes();
 
             obj.NavigationDivider = uicontrol(obj.VideoPanel, 'ForegroundColor', 'black', 'BackgroundColor', 'black', 'Style','text', 'Units', 'normalized', 'String', '----------------------------', 'Visible','on', 'BackgroundColor', obj.MainFigure.Color, 'ButtonDownFcn', @obj.NavigationDividerMouseDown, 'Enable', 'off');
             obj.StatusBar =  uicontrol(obj.VideoPanel, 'Style', 'text', 'Units', 'normalized', 'String', '', 'HorizontalAlignment', 'left');
             obj.HelpButton = uicontrol(obj.VideoPanel, 'Style', 'pushbutton', 'Units', 'normalized', 'String', '?', 'HorizontalAlignment', 'center', 'Callback', @obj.showHelp);
-            obj.setNavigationAxesHeightFraction(0.175);
 
             % Style graphics containers
             obj.MainFigure.ToolBar = 'none';
             obj.MainFigure.MenuBar = 'none';
             obj.MainFigure.NumberTitle = 'off';
             obj.MainFigure.Name = 'Video Browser';
-            for axNum = 1:obj.getNumNavigationAxes()
-                obj.NavigationAxes(axNum).Toolbar.Visible = 'off';
-                obj.NavigationAxes(axNum).YTickMode = 'manual';
-                obj.NavigationAxes(axNum).YTickLabelMode = 'manual';
-                obj.NavigationAxes(axNum).YTickLabel = [];
-                obj.NavigationAxes(axNum).YTick = [];
-                axis(obj.NavigationAxes(axNum), 'off');
-            end
 
             obj.VideoAxes.Toolbar.Visible = 'off';
             obj.VideoAxes.YTickMode = 'manual';
@@ -559,6 +547,8 @@ classdef VideoBrowser < handle
             axis(obj.VideoAxes, 'off');
             obj.VideoAxes.Visible = true;
 
+            obj.setNavigationAxesHeightFraction(0.175);
+            
             % Configure callbacks
             obj.MainFigure.WindowButtonMotionFcn = @obj.MouseMotionHandler;
             obj.MainFigure.WindowButtonUpFcn = @obj.MouseUpHandler;
@@ -701,7 +691,7 @@ classdef VideoBrowser < handle
         end
         function updateNavigationData(obj, axNum)
             % Update the data plotted on the kth navigation axes
-            if ischar(obj.NavigationDataFunction{axNum}) && ~isempty(obj.NavigationDataFunction{axNum})
+            if istext(obj.NavigationDataFunction{axNum}) && ~isempty(obj.NavigationDataFunction{axNum})
                 % Navigation data function is a char array - must be a
                 % named function
                 switch obj.NavigationDataFunction{axNum}
@@ -944,6 +934,10 @@ classdef VideoBrowser < handle
             duration = obj.getNumFrames() / obj.VideoFrameRate;
         end
         function updateNavigationAxesContextMenu(obj, axNums)
+            arguments
+                obj VideoBrowser
+                axNums double = 1:obj.getNumNavigationAxes()
+            end
             if isempty(obj.MainFigure)
                 % Main figure hasn't been created yet, skip this.
                 return;
@@ -1035,7 +1029,7 @@ classdef VideoBrowser < handle
         function newVideoData = prepareNewVideoData(obj, newVideoData)
             % Process whatever user has passed in for video data
 
-            if ischar(newVideoData)
+            if istext(newVideoData)
                 % User has provided a filepath instead of the actual video
                 % data - load it.
                 obj.VideoPath = newVideoData;
@@ -1077,11 +1071,40 @@ classdef VideoBrowser < handle
             obj.drawNavigationData();
             obj.updateNavigationAxesContextMenu(1:obj.getNumNavigationAxes());
         end
+        function UpdateNavigationAxes(obj)
+            % Make sure # of axes corresponds to number of navigation data
+            % series
+
+            delete(obj.NavigationAxes);
+            numAxes = obj.getNumNavigationAxes();
+            obj.NavigationAxes = matlab.graphics.axis.Axes.empty(0, numAxes);
+            for axNum = 1:numAxes
+                obj.NavigationAxes(axNum) =    axes(obj.NavigationPanel, 'Units', 'normalized', 'HitTest', 'on', 'PickableParts', 'all');
+            end
+            if ~isempty(obj.NavigationAxes)
+                % Link x-axis of navigation axes
+                linkaxes(obj.NavigationAxes, 'x');
+                for axNum = 1:numAxes
+                    obj.NavigationAxes(axNum).Toolbar.Visible = 'off';
+                    obj.NavigationAxes(axNum).YTickMode = 'manual';
+                    obj.NavigationAxes(axNum).YTickLabelMode = 'manual';
+                    obj.NavigationAxes(axNum).YTickLabel = [];
+                    obj.NavigationAxes(axNum).YTick = [];
+                    axis(obj.NavigationAxes(axNum), 'off');
+                end
+            end
+
+            obj.updateNavigationAxesContextMenu();
+        end
         function set.NavigationData(obj, newNavigationData)
             % Setter for the NavigationData property
-            
+
+            if ~iscell(newNavigationData)
+                newNavigationData = {newNavigationData};
+            end
             obj.NavigationData = newNavigationData;
-%             obj.drawNavigationData();
+
+%           obj.drawNavigationData();
         end
         function set.NavigationColor(obj, newNavigationColor)
             % Setter for the NavigationColor property
