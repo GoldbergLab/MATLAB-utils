@@ -17,6 +17,7 @@ classdef VideoReaderAsync < handle
         AllDataLoadedCallback function_handle = function_handle.empty
         FramesReceivedCallback function_handle = function_handle.empty
         StoreData logical = true
+        Async logical = true
     end
     properties (Access = private)
         DataBuffer = uint8.empty
@@ -27,6 +28,50 @@ classdef VideoReaderAsync < handle
     end
     methods
         function obj = VideoReaderAsync(path, options)
+            % VideoReaderAsync class constructor
+            %   path: path to video file
+            %   Name/Value arguments:
+            %       LoadNow: begin video load as soon as object is created.
+            %           If false, use beginLoad function to start loading.
+            %           Default is true
+            %       Async: Load video asynchronously. Default is true.
+            %       ProgressBar: Display GUI progress bar for loading.
+            %           Default is false.
+            %       Verbosity: One of 'silent', 'error', 'warning', 'info',
+            %           indicating the desired command window verbosity
+            %           level while loading. Default is 'warning'.
+            %       NewDataLoadedCallback: A callback function that is
+            %           called whenever another chunk of video data has
+            %           been loaded. It should take two arguments, the
+            %           VideoReaderAsync object that triggered the
+            %               callback, and an event struct containing the 
+            %               following fields :
+            %                   NumNewFrames - # of frames in latest chunk
+            %                   NumFramesLoaded - # of frames loaded so far
+            %       AllDataLoadedCallback: A callback function that is
+            %           called when all video data has finished loading
+            %           been loaded. It should take two arguments, the
+            %           VideoReaderAsync object that triggered the
+            %               callback, and an event  struct containing the 
+            %               following fields :
+            %                   NumNewFrames - # of frames in latest chunk
+            %                   NumFramesLoaded - # of frames loaded so far
+            %       FramesReceivedCallback: A callback function that is
+            %           called whenever another chunk of video data has
+            %           been loaded. It should take two arguments, the
+            %           VideoReaderAsync object that triggered the
+            %               callback, and an event struct containing the 
+            %               following fields :
+            %                   Frames - the newest chunk of video data
+            %                   FrameStart - frame # of first new frame
+            %                   FrameEnd - frame # of last new frame
+            %       StoreData: An optional logical boolean indicating
+            %           whether or not the incoming video data should be
+            %           stored or not. If true, the loaded video data is 
+            %           stored in the VideoReaderAsync.VideoData property.
+            %           If false, it is not stored, and the only way to 
+            %           capture the loaded video data is with the
+            %           FramesReceivedCallback function. Default is true.
             arguments
                 path {mustBeText}
                 options.LoadNow logical = true;
@@ -55,10 +100,9 @@ classdef VideoReaderAsync < handle
             obj.AllDataLoadedCallback = options.AllDataLoadedCallback;
             obj.FramesReceivedCallback = options.FramesReceivedCallback;
 
+            obj.Async = options.Async;
             obj.StoreData = options.StoreData;
-
             obj.ProgressBarEnabled = options.ProgressBar;
-
             obj.Path = path;
 
             obj.loadVideoInfo();
@@ -92,7 +136,13 @@ classdef VideoReaderAsync < handle
                 obj.ProgressBarText = escapeChars(sprintf('Loading %s', obj.Path), '\', '\');
                 obj.ProgressBar = waitbar(0, obj.ProgressBarText);
             end
-            obj.WorkerFuture = parfeval(@loadVideoAsync, 0, obj.Path, dataQueue, msgQueue, obj.NumFrames, obj.Width, obj.Height, obj.NumChannels);
+            if obj.Async
+                % Load video asynchronously
+                obj.WorkerFuture = parfeval(@loadVideoAsync, 0, obj.Path, dataQueue, msgQueue, obj.NumFrames, obj.Width, obj.Height, obj.NumChannels);
+            else
+                % Load video synchronously
+                loadVideoAsync(obj.Path, dataQueue, msgQueue, obj.NumFrames, obj.Width, obj.Height, obj.NumChannels);
+            end
         end
         function receiveFrames(obj, data)
             frameShape = [obj.NumChannels, obj.Height, obj.Width];
