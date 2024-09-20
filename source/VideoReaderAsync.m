@@ -1,4 +1,5 @@
 classdef VideoReaderAsync < handle
+    % VideoReaderAsync: A class for loading audio and video asynchronously
     properties
         VideoData
         AudioData
@@ -10,9 +11,12 @@ classdef VideoReaderAsync < handle
         Height double {mustBeInteger, mustBeGreaterThan(Height, 0)} = []
         NumChannels double {mustBeInteger, mustBeGreaterThan(NumChannels, 0)} = []
         NumFrames double {mustBeInteger, mustBeGreaterThan(NumFrames, 0)} = []
+        FrameRate double = []
         Verbosity {mustBeText, mustBeMember(Verbosity, {'silent', 'error', 'warning', 'info'})} = 'warning'
-        NewDataLoadedCallback function_handle = @NOP
-        AllDataLoadedCallback function_handle = @NOP
+        NewDataLoadedCallback function_handle = function_handle.empty
+        AllDataLoadedCallback function_handle = function_handle.empty
+        FramesReceivedCallback function_handle = function_handle.empty
+        StoreData logical = true
     end
     properties (Access = private)
         DataBuffer = uint8.empty
@@ -29,8 +33,10 @@ classdef VideoReaderAsync < handle
                 options.Async logical = true;
                 options.ProgressBar logical = false;
                 options.Verbosity char {mustBeText, mustBeMember(options.Verbosity, {'silent', 'error', 'warning', 'info'})} = 'warning'
-                options.NewDataLoadedCallback function_handle = @NOP
-                options.AllDataLoadedCallback function_handle = @NOP
+                options.NewDataLoadedCallback function_handle = function_handle.empty
+                options.AllDataLoadedCallback function_handle = function_handle.empty
+                options.FramesReceivedCallback function_handle = function_handle.empty
+                options.StoreData logical = true
             end
 
             obj.Verbosity = options.Verbosity;
@@ -47,6 +53,9 @@ classdef VideoReaderAsync < handle
 
             obj.NewDataLoadedCallback = options.NewDataLoadedCallback;
             obj.AllDataLoadedCallback = options.AllDataLoadedCallback;
+            obj.FramesReceivedCallback = options.FramesReceivedCallback;
+
+            obj.StoreData = options.StoreData;
 
             obj.ProgressBarEnabled = options.ProgressBar;
 
@@ -86,7 +95,6 @@ classdef VideoReaderAsync < handle
             obj.WorkerFuture = parfeval(@loadVideoAsync, 0, obj.Path, dataQueue, msgQueue, obj.NumFrames, obj.Width, obj.Height, obj.NumChannels);
         end
         function receiveFrames(obj, data)
-            finalVideoShape = [obj.Width, obj.Height, obj.NumChannels, obj.NumFrames];
             frameShape = [obj.NumChannels, obj.Height, obj.Width];
 
             frameBytes = prod(frameShape);
@@ -97,14 +105,22 @@ classdef VideoReaderAsync < handle
             if numFrames > 0
                 % At least one full frame received, add it on
                 framesShape = [frameShape, numFrames];
-                if isempty(obj.VideoData)
-                    % Initialize obj.VideoData if it's empty
-                    obj.VideoData = zeros(finalVideoShape, 'uint8'); %uint8.empty([finalFrameShape, 0]);
-                end
                 % Rearrange new frame data to match desired output format
                 newFrames = permute(reshape(data(1:numFrames * frameBytes), framesShape), [3, 2, 1, 4]);
-                % Load the newly received frames
-                obj.VideoData(:, :, :, obj.NumFramesLoaded+1:obj.NumFramesLoaded+numFrames) = newFrames;
+                frameStart = obj.NumFramesLoaded+1;
+                frameEnd = obj.NumFramesLoaded+numFrames;
+                if obj.StoreData
+                    % Load the newly received frames
+                    obj.VideoData(:, :, :, frameStart:frameEnd) = newFrames;
+                end
+                if ~isempty(obj.FramesReceivedCallback)
+                    event.Frames = newFrames;
+                    event.FrameStart = frameStart;
+                    event.FrameEnd = frameEnd;
+                    obj.FramesReceivedCallback(obj, event);
+                    clear event;
+                end
+
                 obj.NumFramesLoaded = obj.NumFramesLoaded + numFrames;
             end
 
@@ -121,16 +137,23 @@ classdef VideoReaderAsync < handle
             obj.DataBuffer = data((numFrames * frameBytes + 1):end);
             if obj.NumFramesLoaded == obj.NumFrames
                 % Done receiving video
-                obj.VideoData = squeeze(obj.VideoData);
-                obj.Loaded = true;
+                if obj.StoreData
+                    obj.VideoData = squeeze(obj.VideoData);
+                    obj.Loaded = true;
+                end
                 % Close progress bar
                 if obj.ProgressBarEnabled && isvalid(obj.ProgressBar)
                     close(obj.ProgressBar);
                 end
-                obj.AllDataLoadedCallback(obj, event);
+                if ~isempty(obj.AllDataLoadedCallback)
+                    obj.AllDataLoadedCallback(obj, event);
+                end
             else
-                obj.NewDataLoadedCallback(obj, event);
+                if ~isempty(obj.NewDataLoadedCallback)
+                    obj.NewDataLoadedCallback(obj, event);
+                end
             end
+            clear event;
         end
         function loadVideoInfo(obj)
             % Get video size using ffprobe
@@ -140,6 +163,12 @@ classdef VideoReaderAsync < handle
             obj.Width = videoInfo.height;
             obj.NumFrames = videoInfo.numFrames;
             obj.NumChannels = videoInfo.numChannels;
+            obj.FrameRate = videoInfo.frameRate;
+            % Initialize video data
+            finalVideoShape = [obj.Width, obj.Height, obj.NumChannels, obj.NumFrames];
+            if obj.StoreData
+                obj.VideoData = zeros(finalVideoShape, 'uint8');
+            end
         end
         function loadProgress = get.LoadProgress(obj)
             if obj.NumFrames == 0
