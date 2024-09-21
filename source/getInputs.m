@@ -25,8 +25,8 @@ function inputs = getInputs(titleText, names, defaults, descriptions)
 arguments
     titleText char
     names cell
-    defaults cell
-    descriptions cell
+    defaults cell = cell(1, length(names))
+    descriptions cell = cell(1, length(names))
 end
 
 numInputs = length(names);
