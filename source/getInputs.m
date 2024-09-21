@@ -1,4 +1,4 @@
-function inputs = getInputs(titleText, names, defaults, descriptions)
+function inputs = getInputs(titleText, names, defaults, descriptions, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % getInputs: Create a simple GUI to get arbitrary user input
 % usage:  inputs = getInputs(titleText, names, defaults, descriptions)
@@ -27,6 +27,8 @@ arguments
     names cell
     defaults cell = cell(1, length(names))
     descriptions cell = cell(1, length(names))
+    options.Position double = []
+    options.PositionUnit char = 'normalized'
 end
 
 numInputs = length(names);
@@ -37,7 +39,15 @@ xMargin = 0.5;
 yMargin = 0.2;
 
 f = figure('NumberTitle', 'off', 'Name', titleText, 'Units', 'characters', 'WindowKeyPressFcn', @keypress, 'ToolBar', 'none', 'MenuBar', 'none', 'Resize', 'off');
-f.Position(4) = titleCharacterHeight + buttonHeight + 3*numInputs;
+if ~isempty(options.Position)
+    options.Position(4) = titleCharacterHeight + buttonHeight + 3*numInputs;
+    setPositionWithUnits(f, options.Position, options.PositionUnit);
+else
+    % Just center it on the screen
+    anchorWidget(f, 'C', groot(), 'C');
+end
+
+
 f.UserData.Cancelled = true;
 
 width = f.Position(3);

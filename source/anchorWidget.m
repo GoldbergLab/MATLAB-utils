@@ -34,8 +34,18 @@ end
 
 commonUnit = 'inches';
 anchorPoints = {anchorPoint1, anchorPoint2};
-positions = [getPositionWithUnits(widget1, commonUnit); ...
-             getPositionWithUnits(widget2, commonUnit)];
+position1 = getPositionWithUnits(widget1, commonUnit);
+screen = groot();
+if widget2 == screen
+    originalScreenUnit = screen.Units;
+    screen.Units = commonUnit;
+    position2 = screen.ScreenSize;
+    screen.Units = originalScreenUnit;
+else
+    position2 = getPositionWithUnits(widget2, commonUnit);
+end
+positions = [position1; ...
+             position2];
 
 if widget1.Parent == widget2
     % If widget2 is the parent of widget1, then zero out its position
