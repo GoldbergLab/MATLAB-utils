@@ -1,17 +1,17 @@
-function [filePaths, varargout] = findFiles(rootDirOrTree, options)
+function [filePaths, varargout] = findFiles(rootDirOrTree, pattern, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% findFilesByRegex: Search rootDir for file paths that match the regex
-% usage:                 filePaths = findFiles(rootDir)
-%   [filePaths, token1, token2...] = findFiles(rootDir, "Name", "Value", ...)
+% findFiles: Search rootDir for file paths that match the regex
+% usage:                 filePaths = findFiles(rootDir, pattern)
+%   [filePaths, token1, token2...] = findFiles(rootDir, pattern, 
+%                                              "Name", "Value", ...)
 %
 % where,
 %    rootDirOrTree is a char array representing a directory to recursively 
 %       search or a file tree struct of the form returned by buildFileTree
+%    pattern a char array representing a file regex to match. Note that if 
+%       the regex contains one or more capturing groups, the text of those
+%       captured groups can be retrieved from varargout. Default is '.*'.
 %    Name/Value options can include:
-%       RegexPattern: a char array representing a file regex to match. 
-%           Note that if the regex contains one or more capturing groups, 
-%           the text of those captured groups can be retrieved from 
-%           varargout. Default is '.*'.
 %       MatchWholePath: an optional boolean flag indicating whether to 
 %           apply the regex to the path as well as name. Default is false.
 %       SearchSubdirectories: a boolean indicating whether to apply regex 
@@ -33,6 +33,8 @@ function [filePaths, varargout] = findFiles(rootDirOrTree, options)
 %                   according to the creation time of the files, or 
 %               "ModifyTime" (indicating the time filtering should be done
 %                   according to the last modified time of the files)
+%       CaseSensitive: should the pattern be matched case sensitive?
+%           Default is true.
 %
 %   filePaths is a cell array of file paths that matched the regex
 %   token1, token2, ... is one or more cell arrays containing the tokens
@@ -54,7 +56,7 @@ function [filePaths, varargout] = findFiles(rootDirOrTree, options)
 %
 %   running the command
 %
-%     [filePaths, fileNums] = findFilesByRegex(rootDir, 'test([0-9])\.txt')
+%     [filePaths, fileNums] = findFiles(rootDir, 'test([0-9])\.txt')
 %
 %   Would produce the following arrays:
 %
@@ -76,7 +78,7 @@ function [filePaths, varargout] = findFiles(rootDirOrTree, options)
 
 arguments
     rootDirOrTree
-    options.RegexPattern char = ''
+    pattern char = ''
     options.MatchWholePath logical = false
     options.SearchSubdirectories = true         % false or 0 means no recursion, true means infinite depth recursion, a whole number indicates how deep to go.
     options.IncludeFolders logical = false
@@ -85,6 +87,7 @@ arguments
     options.StopTimestamp datetime = datetime.empty
     options.TimeFilterMode char {mustBeMember(options.TimeFilterMode, {'Filename', 'CreateTime', 'ModifyTime'})} = 'Filename'
     options.FilenameTimestampParser function_handle = function_handle.empty
+    options.CaseSensitive logical = true
 end
 
 if isstruct(rootDirOrTree)
@@ -160,9 +163,13 @@ for k = 1:length(files)
         matchName = [name, ext];
     end
     
-    if ~isempty(options.RegexPattern)
+    if ~isempty(pattern)
         % If a regex is given, use it to search 
-        [match, tokens] = regexp(matchName, options.RegexPattern, 'start', 'tokens');
+        if options.CaseSensitive
+            [match, tokens] = regexp(matchName, pattern, 'start', 'tokens');
+        else
+            [match, tokens] = regexpi(matchName, pattern, 'start', 'tokens');
+        end
     else
         match = true;
         tokens = {};
@@ -209,7 +216,7 @@ if options.SearchSubdirectories
             % Run function recursively to capture output from subfolder 
             %   tree
             optionArgs = namedargs2cell(options);
-            [newFilePaths, newFileTokens{:}] = findFiles(newRootDirOrTree, optionArgs{:});
+            [newFilePaths, newFileTokens{:}] = findFiles(newRootDirOrTree, pattern, optionArgs{:});
             % Append subfolder tree path outputs to current folder path 
             %   outputs
             filePaths = [filePaths, newFilePaths]; %#ok<AGROW> 
