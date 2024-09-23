@@ -13,7 +13,7 @@ function position = getWidgetScreenPosition(widget, units)
 %   widget. This function determines the position of the widget relative to
 %   the lower left corner of the screen.
 %
-% See also: 
+% See also: getWidgetFigurePosition
 %
 % Version: 1.0
 % Author:  Brian Kardon

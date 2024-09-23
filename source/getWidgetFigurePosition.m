@@ -13,7 +13,7 @@ function position = getWidgetFigurePosition(widget, units)
 %   widget. This function determines the position of the widget relative to
 %   the lower left corner of the figure ancestor of the widget.
 %
-% See also: 
+% See also: getWidgetScreenPosition
 %
 % Version: 1.0
 % Author:  Brian Kardon
