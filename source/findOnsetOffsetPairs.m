@@ -40,12 +40,16 @@ else
     maxFrame = length(signalMask);
 end
 
-onsets = find(diff([false, signalMask])>0);
+if iscolumn(signalMask)
+    signalMask = signalMask';
+end
+
+onsets = find(diff([false signalMask])>0);
 offsets = find(diff([signalMask, false])<0);
 
 % Handle pulses that start at (or before) the first frame
 if ~includePartialPulses
-    if ~isempty(onsets) && onsets(1) == 1
+    if ~isempty(onsets) && onsets(minFrame) == 1
         onsets(1) = [];
         offsets(1) = [];
     end
