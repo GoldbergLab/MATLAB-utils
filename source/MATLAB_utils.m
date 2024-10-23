@@ -1,4 +1,4 @@
-function MATLAB_utils_path = MATLAB_utils(display)
+function [MATLAB_utils_path, functionList] = MATLAB_utils(display)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MATLAB_utils: reference/indicator function for MATLAB-utils repo
 % usage:  MATLAB_utils_path = MATLAB_utils(display)
