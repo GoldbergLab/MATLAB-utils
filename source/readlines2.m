@@ -74,3 +74,4 @@ catch ME
     fclose(fileID);
     rethrow(ME);
 end
+fclose(fileID);
