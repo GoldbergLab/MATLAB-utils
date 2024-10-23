@@ -35,6 +35,9 @@ end
 
 % Open file
 fileID = fopen(filePath);
+if fileID == -1
+    error('Cannot open file "%s"', filePath);
+end
 
 try
     if isinf(maxLines)
