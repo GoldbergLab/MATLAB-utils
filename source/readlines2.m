@@ -1,4 +1,4 @@
-function lines = readlines2(filePath, lineSeparator, maxLines)
+function [lines, offset] = readlines2(filePath, lineSeparator, maxLines)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % readlines: read a text file and output the text split by lines
 % usage:  lines = readlines(filePath)
@@ -45,6 +45,9 @@ try
         rawText = char(fread(fileID)');
         % Split lines on separator
         lines = split(rawText, lineSeparator);
+        if nargout > 1
+            offset = length(rawText) + 1;
+        end
     else
         % Only some lines requested, read in chunks until desired line count is achieved
         chunkSize = 10;
@@ -69,8 +72,11 @@ try
         end
         % Split lines on separator
         lines = split(rawText, lineSeparator);
-        % Discard last line, which is extra
-        lines = lines(1:end-1);
+        % Discard any extra lines
+        lines = lines(1:maxLines);
+        if nargout > 1
+            offset = sum(cellfun(@length, lines)) + length(lineSeparator) * (length(lines)-1) + 1;
+        end
     end
 catch ME
     % Try to ensure graceful close
