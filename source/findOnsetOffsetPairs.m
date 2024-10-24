@@ -1,4 +1,4 @@
-function [onsets, offsets] = findOnsetOffsetPairs(signalMask, signalOnSamples, includePartialPulses)
+function [onsets, offsets, startPulse, endPulse] = findOnsetOffsetPairs(signalMask, signalOnSamples, includePartialPulses)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % findOnsetOffsetPairs: find onset/offset pairs for either logical signal 
 %   mask or a list of signal on frames
@@ -25,8 +25,13 @@ function [onsets, offsets] = findOnsetOffsetPairs(signalMask, signalOnSamples, i
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+arguments
+    signalMask
+    signalOnSamples = []
+    includePartialPulses = false
+end
 
-if ~exist('includePartialPulses', 'var') || isempty(includePartialPulses)
+if isempty(includePartialPulses)
     includePartialPulses = false;
 end
 
@@ -58,3 +63,6 @@ if ~includePartialPulses
         offsets(end) = [];
     end
 end
+
+startPulse = signalMask(minFrame);
+endPulse = signalMask(maxFrame);
