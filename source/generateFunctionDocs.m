@@ -50,7 +50,7 @@ email = options.Email;
 template1 = [...
 '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n',...
 '% <function name>: <short description>\n',                                     ...
-'% usage: <output args><function name>(<input args>)\n',                  ...
+'% usage: <output args> = <function name>(<input args>)\n',                  ...
 '%\n',                                                                          ...
 '% where,',                                                                   ...
 ];
@@ -105,11 +105,12 @@ template1 = regexprep(template1, '<function name>', functionName);
 template1 = regexprep(template1, '<short description>', shortDescription);
 allOutputs = join(outputs, ', ');
 if length(outputs) > 1
-    allOutputs = ['[', allOutputs, ']'];
+    allOutputs = ['[', allOutputs{1}, ']'];
 end
 allInputs = join(inputs, ', ');
-template1 = regexprep(template1, '<output args>', allOutputs{1});
-template1 = regexprep(template1, '<input args>', allInputs{1});
+allInputs = allInputs{1};
+template1 = regexprep(template1, '<output args>', allOutputs);
+template1 = regexprep(template1, '<input args>', allInputs);
 
 argSpecs = {};
 IO = [inputs, outputs];
