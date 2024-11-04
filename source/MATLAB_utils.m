@@ -27,14 +27,12 @@ function [MATLAB_utils_path, functionList] = MATLAB_utils(display)
     arguments
         display = true
     end
-    
+
     [MATLAB_utils_source_path, ~, ~] = fileparts(mfilename('fullpath'));
     MATLAB_utils_path = MATLAB_utils_source_path;
-    
     while ~isfolder(fullfile(MATLAB_utils_path, '\.git'))
         [MATLAB_utils_path, ~, ~] = fileparts(MATLAB_utils_path);
     end
-    
     if ischar(display)
         % User supplied regex to search for functions
         functionRegex = display;
@@ -47,29 +45,7 @@ function [MATLAB_utils_path, functionList] = MATLAB_utils(display)
     end
 
     if islogical(display) && display
-        originalDir = pwd();
-        cd(MATLAB_utils_path)
-        [status, commitDate] = system('git log -1 --format=%cd --date=local');
-        if status ~= 0
-            commitDate = '<error - unable to get commit date>';
-        end
-        commitDate = strtrim(commitDate);
-        [status, commitHash] = system('git rev-parse --short HEAD');
-        if status ~= 0
-            commitHash = '<error - unable to get commit hash>';
-        end
-        commitHash = strtrim(commitHash);
-        [status, branchName] = system('git rev-parse --abbrev-ref HEAD');
-        if status ~= 0
-            branchName = '<error - unable to get branch name>';
-        end
-        branchName = strtrim(branchName);
-        [status, url] = system('git config --get remote.origin.url');
-        if status ~= 0
-            url = '<error - unable to get GitHub url>';
-        end
-        url = strtrim(url);
-        cd(originalDir);
+        [commitDate, commitHash, branchName, url] = getGitInfo('MATLAB_utils', 'CheckGit', false);
     
         fprintf('\n');
         fprintf('<strong>MATLAB-utils</strong> repository is installed!\n')
