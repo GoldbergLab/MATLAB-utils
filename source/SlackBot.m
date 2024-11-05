@@ -1,27 +1,30 @@
 classdef SlackBot < handle
+    % A class for handling interactions with a Slack workspace from MATLAB
     properties
-        Authorized (1, 1) logical = false
-        SlackUser char = ''
-        SlackTeam char = ''
+        Authorized (1, 1) logical = false               % Authorization successful?
+        SlackUser char = ''                             % Name of authorized Slack user
+        SlackTeam char = ''                             % Name of authorized Slack workspace
     end
-    properties %(Access=private)
-        AuthToken char = ''
-        APIBaseAddress = 'https://slack.com/api'
-        Request matlab.net.http.RequestMessage
-        Uri matlab.net.URI
-        Response matlab.net.http.ResponseMessage
-        ChannelInfo struct   % Cached copy of conversation list
+    properties (Access=private)
+        AuthToken char = ''                             % Slack API token
+        APIBaseAddress = 'https://slack.com/api'        % Base address for Slack API
+        Request matlab.net.http.RequestMessage          % Current HTTP request object
+        Uri matlab.net.URI                              % Current HTTP URI
+        Response matlab.net.http.ResponseMessage        % Last HTTP response object
+        ChannelInfo struct                              % Cached copy of the Slack workspace channel list
     end
     methods
         function obj = SlackBot(options)
             arguments
-                options.AuthToken char = ''
-                options.AuthFile char = ''
+                options.AuthToken char = ''     % A char array representing a Slack auth token
+                options.AuthFile char = ''      % Path to a plain text file containing a Slack auth token
             end
+            % Create a SlackBot
             if ~isempty(options.AuthToken)
+                % User just straight up passed in an auth token
                 obj.AuthToken = options.AuthToken;
-            end
-            if ~isempty(options.AuthFile)
+            elseif ~isempty(options.AuthFile)
+                % User passed in the path to an auth file - 
                 if isfile(options.AuthFile)
                     fid = fopen(options.AuthFile);
                     obj.AuthToken = strip(char(fread(fid)'));
@@ -51,6 +54,8 @@ classdef SlackBot < handle
     end
     methods (Access=protected)
         function CheckResponse(obj)
+            % Check if the most recent response contains an error message.
+            % If so, throw an error.
             if ~strcmp(obj.Response.StatusCode, 'OK')
                 error('Unknown error uploading file');
             end
@@ -59,6 +64,8 @@ classdef SlackBot < handle
             end
         end
         function addHeaderAuth(obj)
+            % Add the authorization token to the header of the current 
+            % request
             k = length(obj.Request.Header)+1;
             obj.Request.Header(k).Name = 'Authorization';
             obj.Request.Header(k).Value = sprintf('Bearer %s', obj.AuthToken);
@@ -68,6 +75,7 @@ classdef SlackBot < handle
                 obj SlackBot
                 APIMethod char
             end
+            % Initialize the current URI using a slack API method name
             import matlab.net.*
             import matlab.net.http.*
             obj.Uri = URI(fullfile(obj.APIBaseAddress, APIMethod));
@@ -77,11 +85,14 @@ classdef SlackBot < handle
                 obj SlackBot
                 url char
             end
+            % Initialize the current URI using an arbitrary url
             import matlab.net.*
             import matlab.net.http.*
             obj.Uri = URI(url);
         end
         function setRequestPayload(obj, payload)
+            % Set the raw POST payload bytes (rather than use a structured 
+            % query as in addRequestQuery)
             if obj.Request.Method ~= 'POST' %#ok<BDSCA> 
                 error('Set request payload is only valid for POST requests.');
             end
@@ -91,6 +102,13 @@ classdef SlackBot < handle
             obj.Request.Body.Payload = payload;
         end
         function addRequestQuery(obj, keys, values)
+            arguments
+                obj SlackBot
+                keys
+                values
+            end
+            % Add a structured query to the request for either GET or POST 
+            % methods
             if ~iscell(keys)
                 keys = {keys};
             end
@@ -128,6 +146,7 @@ classdef SlackBot < handle
                 method {mustBeMember(method, {'GET', 'POST'})} = 'GET'
                 options.AddAuth = true
             end
+            % Start a new request with the given method
             import matlab.net.*
             import matlab.net.http.*
             obj.Request = RequestMessage(method);
@@ -136,6 +155,8 @@ classdef SlackBot < handle
             end
         end
         function channelID = getChannelID(obj, channelNameOrID)
+            % Get the channel ID from an unknown channel specifier (either 
+            % a name with or without a "#" prefix or an ID)
             channelInfo = obj.GetChannelInfo();
             % Get rid of leading # if it was provided
             channelNameOrID = regexprep(channelNameOrID, '#', '');
@@ -161,6 +182,9 @@ classdef SlackBot < handle
                 obj SlackBot
                 options.ForceRefresh logical = false
             end
+            % If channel information is cached, return it. Otherwise, get 
+            % all channel information from the Slack workspace and cache it
+            % for future use
             if options.ForceRefresh || isempty(obj.ChannelInfo)
                 obj.InitializeRequest('GET');
                 obj.InitializeAPIURI('conversations.list');
@@ -176,6 +200,7 @@ classdef SlackBot < handle
             end
         end
         function [authOk, authUser, authTeam] = TestAuth(obj)
+            % Check if Slack authentication succeeded
             obj.InitializeRequest('GET');
             obj.InitializeAPIURI('auth.test');
             obj.SendRequest();
@@ -195,6 +220,7 @@ classdef SlackBot < handle
             obj.SendRequest();
         end
         function SendRequest(obj)
+            % Send the current request to Slack
             obj.Response = send(obj.Request, obj.Uri);
             obj.CheckResponse()
         end
@@ -205,6 +231,7 @@ classdef SlackBot < handle
                 channel char = ''
                 text char = ''
             end
+            % Upload a file to slack
             if ~exist(filepath, 'file')
                 error('File "%s" not found.', filepath);
             end
@@ -258,6 +285,7 @@ classdef SlackBot < handle
     end
     methods (Static, Access=protected)
         function text = addFooter(text)
+            % Add an identifying footer to the Slack message
             user = strip(getenv('username'));
             if isempty(user)
                 user = 'unknown';
