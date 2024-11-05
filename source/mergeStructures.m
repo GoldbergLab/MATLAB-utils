@@ -30,7 +30,7 @@ function A = mergeStructures(A, B, options)
 %
 % Flexibly merge two structures that may or may not have common fields.
 %
-% See also:
+% See also: concatenateStructures
 %
 % Version: 1.0
 % Author:  Brian Kardon

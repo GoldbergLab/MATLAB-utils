@@ -1,12 +1,16 @@
-classdef SlackBot
+classdef SlackBot < handle
     properties
         Authorized (1, 1) logical = false
         SlackUser char = ''
         SlackTeam char = ''
     end
-    properties (Access=private)
+    properties %(Access=private)
         AuthToken char = ''
         APIBaseAddress = 'https://slack.com/api'
+        Request matlab.net.http.RequestMessage
+        Uri matlab.net.URI
+        Response matlab.net.http.ResponseMessage
+        ChannelInfo struct   % Cached copy of conversation list
     end
     methods
         function obj = SlackBot(options)
@@ -45,20 +49,48 @@ classdef SlackBot
             end
         end
     end
-    methods (Access=protected )
-        function request = addHeaderAuth(obj, request)
-            k = length(request.Header)+1;
-            request.Header(k).Name = 'Authorization';
-            request.Header(k).Value = sprintf('Bearer %s', obj.AuthToken);
+    methods (Access=protected)
+        function CheckResponse(obj)
+            if ~strcmp(obj.Response.StatusCode, 'OK')
+                error('Unknown error uploading file');
+            end
+            if isstruct(obj.Response.Body.Data) && ~obj.Response.Body.Data.ok
+                error('Upload file error: %s', obj.Response.Body.Data.error);
+            end
         end
-        function uri = GetURI(obj, APIMethod)
+        function addHeaderAuth(obj)
+            k = length(obj.Request.Header)+1;
+            obj.Request.Header(k).Name = 'Authorization';
+            obj.Request.Header(k).Value = sprintf('Bearer %s', obj.AuthToken);
+        end
+        function InitializeAPIURI(obj, APIMethod)
+            arguments
+                obj SlackBot
+                APIMethod char
+            end
             import matlab.net.*
             import matlab.net.http.*
-            uri = URI(fullfile(obj.APIBaseAddress, APIMethod));
+            obj.Uri = URI(fullfile(obj.APIBaseAddress, APIMethod));
         end
-    end
-    methods (Static)
-        function request = addBodyDataFields(request, keys, values)
+        function InitializeURI(obj, url)
+            arguments
+                obj SlackBot
+                url char
+            end
+            import matlab.net.*
+            import matlab.net.http.*
+            obj.Uri = URI(url);
+        end
+        function setRequestPayload(obj, payload)
+            if obj.Request.Method ~= 'POST' %#ok<BDSCA> 
+                error('Set request payload is only valid for POST requests.');
+            end
+            if isempty(obj.Request.Body)
+                obj.Request.Body(1).Data = struct();
+            end
+            obj.Request.Body.Payload = payload;
+        end
+        function addRequestQuery(obj, keys, values)
             if ~iscell(keys)
                 keys = {keys};
             end
@@ -68,23 +100,168 @@ classdef SlackBot
             if length(keys) ~= length(values)
                 error('Must provide the same # of values and keys');
             end
-            for k = 1:length(keys)
-                if isempty(request.Body)
-                    request.Body(1).Data = struct();
-                end
-                request.Body.Data.(keys{k}) = values{k};
+            switch obj.Request.Method
+                case 'POST'
+                    for k = 1:length(keys)
+                        key = keys{k};
+                        value = values{k};
+                        if isempty(obj.Request.Body)
+                            obj.Request.Body(1).Data = struct();
+                        end
+                        obj.Request.Body.Data.(key) = value;
+                    end
+                case 'GET'
+                    queryParams = matlab.net.QueryParameter.empty();
+                    for k = 1:length(keys)
+                        key = keys{k};
+                        value = values{k};
+                        queryParams(end+1) = matlab.net.QueryParameter(key, value); %#ok<AGROW> 
+                    end
+                    obj.Uri.Query = queryParams;
+                otherwise
+                    error('Unsupported request method: %s', obj.Request.Method);
             end
         end
-        function request = CreateRequest(method)
+        function InitializeRequest(obj, method, options)
             arguments
+                obj SlackBot
                 method {mustBeMember(method, {'GET', 'POST'})} = 'GET'
+                options.AddAuth = true
             end
             import matlab.net.*
             import matlab.net.http.*
-            request = RequestMessage(method);
+            obj.Request = RequestMessage(method);
+            if options.AddAuth
+                obj.addHeaderAuth();
+            end
         end
+        function channelID = getChannelID(obj, channelNameOrID)
+            channelInfo = obj.GetChannelInfo();
+            % Get rid of leading # if it was provided
+            channelNameOrID = regexprep(channelNameOrID, '#', '');
+            % Check if this is already an ID
+            channelIdx = find(strcmp(channelNameOrID, {channelInfo.id}), 1);
+            if ~isempty(channelIdx)
+                channelID = channelNameOrID;
+                return
+            end
+            % Must be a name instead
+            channelIdx = find(strcmp(channelNameOrID, {channelInfo.name}), 1);
+            if ~isempty(channelIdx)
+                channelID = channelInfo(channelIdx).id;
+                return
+            end
+            % Not a name or an id
+            error('Unknown channel name or ID: %s', channelNameOrID);
+        end
+    end
+    methods
+        function channelInfo = GetChannelInfo(obj, options)
+            arguments
+                obj SlackBot
+                options.ForceRefresh logical = false
+            end
+            if options.ForceRefresh || isempty(obj.ChannelInfo)
+                obj.InitializeRequest('GET');
+                obj.InitializeAPIURI('conversations.list');
+                obj.SendRequest();
+                % Gather channel info into a struct array
+                channels = obj.Response.Body.Data.channels;
+                channelInfo = concatenateStructures(channels{:});
+                % Cache result
+                obj.ChannelInfo = channelInfo;
+            else
+                % Just use cache
+                channelInfo = obj.ChannelInfo;
+            end
+        end
+        function [authOk, authUser, authTeam] = TestAuth(obj)
+            obj.InitializeRequest('GET');
+            obj.InitializeAPIURI('auth.test');
+            obj.SendRequest();
+            authOk = obj.Response.Body.Data.ok;
+            authUser = obj.Response.Body.Data.user;
+            authTeam = obj.Response.Body.Data.team;
+        end
+        function PostMessage(obj, channelID, text)
+            % Ensure the channelID is a valid ID
+            channelID = obj.getChannelID(channelID);
+            obj.InitializeRequest('POST');
+            obj.InitializeAPIURI('chat.postMessage');
+
+            text = obj.addFooter(text);
+
+            obj.addRequestQuery({'channel', 'text'}, {channelID, text});
+            obj.SendRequest();
+        end
+        function SendRequest(obj)
+            obj.Response = send(obj.Request, obj.Uri);
+            obj.CheckResponse()
+        end
+        function UploadFile(obj, filepath, channel, text)
+            arguments
+                obj SlackBot
+                filepath char
+                channel char = ''
+                text char = ''
+            end
+            if ~exist(filepath, 'file')
+                error('File "%s" not found.', filepath);
+            end
+
+            % Request upload link from Slack
+            obj.InitializeRequest('GET');
+            obj.InitializeAPIURI('files.getUploadURLExternal');
+            [~, filename, ext] = fileparts(filepath);
+            filename = [filename, ext];
+            finfo = dir(filepath);
+            filesize = num2str(finfo.bytes);
+            obj.addRequestQuery({'filename', 'length'}, {filename, filesize});
+            obj.SendRequest();
+
+            uploadURL = obj.Response.Body.Data.upload_url;
+            fileID = obj.Response.Body.Data.file_id;
+
+            % POST file data to upload link'
+            obj.InitializeRequest('POST');
+            obj.InitializeURI(uploadURL);
+            fid = fopen(filepath);
+            fileBytes = fread(fid, '*uint8');
+            fclose(fid);
+            obj.setRequestPayload(fileBytes);
+            obj.SendRequest();
+
+            % Tell Slack to finalize upload
+            obj.InitializeRequest('POST');
+            obj.InitializeAPIURI('files.completeUploadExternal');
+            files.id = fileID;
+            files.title = filename;
+            keys = {};
+            values = {};
+            keys{end+1} = 'files';
+            values{end+1} = {files};
+            if ~isempty(channel)
+                % Ensure the channelID is a valid ID
+                channel = obj.getChannelID(channel);
+                
+                keys{end+1} = 'channel_id';
+                values{end+1} = channel;
+            end
+            if ~isempty(text)
+                keys{end+1} = 'initial_comment';
+                values{end+1} = text;
+            end
+
+            obj.addRequestQuery(keys, values);
+            obj.SendRequest();
+        end
+    end
+    methods (Static, Access=protected)
         function text = addFooter(text)
-            user = getenv('username');
+            user = strip(getenv('username'));
+            if isempty(user)
+                user = 'unknown';
+            end
             hostname = getenv('COMPUTERNAME');
             if isempty(hostname)
                 hostname = getenv('HOSTNAME');
@@ -93,30 +270,15 @@ classdef SlackBot
             if isempty(hostname)
                 hostname = host.getHostName();
             end
+            if isempty(hostname)
+                hostname = 'unknown';
+            end
             ipAddress = host.getHostAddress();
+            if isempty(ipAddress)
+                ipAddress = 'unknown';
+            end
 
             text = [text, sprintf('\n\n`Message sent from MATLAB SlackBot by user logged in as %s from host %s (%s)`', user, hostname, ipAddress)];
-        end
-    end
-    methods
-        function [authOk, authUser, authTeam] = TestAuth(obj)
-            request = obj.CreateRequest();
-            request = obj.addHeaderAuth(request);
-            uri = obj.GetURI('auth.test');
-            response = send(request, uri);
-            authOk = response.Body.Data.ok;
-            authUser = response.Body.Data.user;
-            authTeam = response.Body.Data.team;
-        end
-        function response = PostMessage(obj, channelID, text)
-            request = obj.CreateRequest('POST');
-            request = obj.addHeaderAuth(request);
-            uri = obj.GetURI('chat.postMessage');
-
-            text = obj.addFooter(text);
-
-            request = obj.addBodyDataFields(request, {'channel', 'text'}, {channelID, text});
-            response = send(request, uri);
         end
     end
 end
