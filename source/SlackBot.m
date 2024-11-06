@@ -209,6 +209,11 @@ classdef SlackBot < handle
             authTeam = obj.Response.Body.Data.team;
         end
         function PostMessage(obj, channelID, text)
+            arguments
+                obj SlackBot
+                channelID char
+                text char
+            end
             % Ensure the channelID is a valid ID
             channelID = obj.getChannelID(channelID);
             obj.InitializeRequest('POST');
@@ -223,6 +228,33 @@ classdef SlackBot < handle
             % Send the current request to Slack
             obj.Response = send(obj.Request, obj.Uri);
             obj.CheckResponse()
+        end
+        function PostGraphics(obj, graphics, channel, text)
+            arguments
+                obj SlackBot
+                graphics matlab.graphics.Graphics
+                channel char
+                text char = ''
+            end
+            % Get temp filename
+            tempGraphicsFilename = [tempname(), '.png'];
+            try
+                % Export graphics object to file
+                exportgraphics(graphics, tempGraphicsFilename);
+                % Upload graphics object to Slack channel
+                obj.UploadFile(tempGraphicsFilename, channel, text);
+                if exist(tempGraphicsFilename, 'file')
+                    % Clean up temp file
+                    delete(tempGraphicsFilename);
+                end
+            catch ME
+                if exist(tempGraphicsFilename, 'file')
+                    % Make sure temp file gets cleaned up
+                    delete(tempGraphicsFilename);
+                end
+                rethrow(ME);
+            end
+
         end
         function UploadFile(obj, filepath, channel, text)
             arguments
