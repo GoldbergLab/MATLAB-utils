@@ -2,8 +2,8 @@ classdef SlackBot < handle
     % A class for handling interactions with a Slack workspace from MATLAB
     properties
         Authorized (1, 1) logical = false               % Authorization successful?
-        SlackUser char = ''                             % Name of authorized Slack user
-        SlackTeam char = ''                             % Name of authorized Slack workspace
+        SlackBotUser char = ''                             % Name of authorized Slack user
+        Workspace char = ''                             % Name of authorized Slack workspace
     end
     properties (Access=private)
         AuthToken char = ''                             % Slack API token
@@ -44,8 +44,8 @@ classdef SlackBot < handle
 
             if authOk
                 obj.Authorized = true;
-                obj.SlackUser = authUser;
-                obj.SlackTeam = authTeam;
+                obj.SlackBotUser = authUser;
+                obj.Workspace = authTeam;
             else
                 obj.Authorized = false;
                 error('Authorization failed');
@@ -60,7 +60,7 @@ classdef SlackBot < handle
                 error('Unknown error uploading file');
             end
             if isstruct(obj.Response.Body.Data) && ~obj.Response.Body.Data.ok
-                error('Upload file error: %s', obj.Response.Body.Data.error);
+                error('Slack error: %s', obj.Response.Body.Data.error);
             end
         end
         function addHeaderAuth(obj)
@@ -233,8 +233,22 @@ classdef SlackBot < handle
             arguments
                 obj SlackBot
                 graphics matlab.graphics.Graphics
-                channel char
+                channel char = ''
                 text char = ''
+            end
+            if isempty(channel)
+                channelInfo = obj.GetChannelInfo();
+                channelInfo = channelInfo([channelInfo.is_member]);
+                % Get channel with GUI
+                [indx, tf] = listdlg(...
+                    'PromptString', {'What channel would you like', 'to post the image to?'}, ...
+                    'ListString', {channelInfo.name}, ...
+                    'SelectionMode', 'single');
+                if ~tf
+                    % No user selection
+                    return
+                end
+                channel = channelInfo(indx).name;
             end
             % Get temp filename
             tempGraphicsFilename = [tempname(), '.png'];
