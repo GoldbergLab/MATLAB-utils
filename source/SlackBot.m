@@ -12,6 +12,7 @@ classdef SlackBot < handle
         Uri matlab.net.URI                              % Current HTTP URI
         Response matlab.net.http.ResponseMessage        % Last HTTP response object
         ChannelInfo struct                              % Cached copy of the Slack workspace channel list
+        UserInfo struct                                 % Cached copy of the Slack workspace user list
     end
     methods
         function obj = SlackBot(options)
@@ -57,7 +58,7 @@ classdef SlackBot < handle
             % Check if the most recent response contains an error message.
             % If so, throw an error.
             if ~strcmp(obj.Response.StatusCode, 'OK')
-                error('Unknown error uploading file');
+                error('Slack error: %s', obj.Response.StatusCode);
             end
             if isstruct(obj.Response.Body.Data) && ~obj.Response.Body.Data.ok
                 error('Slack error: %s', obj.Response.Body.Data.error);
@@ -154,6 +155,27 @@ classdef SlackBot < handle
                 obj.addHeaderAuth();
             end
         end
+        function userID = getUserID(obj, userNameOrID)
+            % Get the user ID from an unknown user specifier (either 
+            % a name with or without a "@" prefix or a user ID)
+            userInfo = obj.GetUserInfo();
+            % Get rid of leading @ if it was provided
+            userNameOrID = regexprep(userNameOrID, '@', '');
+            % Check if this is already an ID
+            userIdx = find(strcmp(userNameOrID, {userInfo.id}), 1);
+            if ~isempty(userIdx)
+                userID = userNameOrID;
+                return
+            end
+            % Must be a name instead
+            userIdx = find(strcmp(userNameOrID, {userInfo.name}), 1);
+            if ~isempty(userIdx)
+                userID = userInfo(userIdx).id;
+                return
+            end
+            % Not a name or an id
+            error('Unknown channel name or ID: %s', userNameOrID);
+        end
         function channelID = getChannelID(obj, channelNameOrID)
             % Get the channel ID from an unknown channel specifier (either 
             % a name with or without a "#" prefix or an ID)
@@ -177,10 +199,33 @@ classdef SlackBot < handle
         end
     end
     methods
+        function userInfo = GetUserInfo(obj, options)
+            arguments
+                obj SlackBot
+                options.ForceRefresh logical = false
+            end
+            % If user information is cached, return it. Otherwise, get 
+            % all user information from the Slack workspace and cache it
+            % for future use
+            if options.ForceRefresh || isempty(obj.UserInfo)
+                obj.InitializeRequest('GET');
+                obj.InitializeAPIURI('users.list');
+                obj.SendRequest();
+                % Gather channel info into a struct array
+                users = obj.Response.Body.Data.members;
+                userInfo = concatenateStructures(users{:});
+                % Cache result
+                obj.UserInfo = userInfo;
+            else
+                % Just use cache
+                userInfo = obj.UserInfo;
+            end
+        end
         function channelInfo = GetChannelInfo(obj, options)
             arguments
                 obj SlackBot
                 options.ForceRefresh logical = false
+                options.IncludeDMs logical = false
             end
             % If channel information is cached, return it. Otherwise, get 
             % all channel information from the Slack workspace and cache it
@@ -188,6 +233,9 @@ classdef SlackBot < handle
             if options.ForceRefresh || isempty(obj.ChannelInfo)
                 obj.InitializeRequest('GET');
                 obj.InitializeAPIURI('conversations.list');
+                if options.IncludeDMs
+                    obj.addRequestQuery({'types'}, {'public_channel,private_channel,mpim,im'});
+                end
                 obj.SendRequest();
                 % Gather channel info into a struct array
                 channels = obj.Response.Body.Data.channels;
@@ -208,14 +256,17 @@ classdef SlackBot < handle
             authUser = obj.Response.Body.Data.user;
             authTeam = obj.Response.Body.Data.team;
         end
-        function PostMessage(obj, channelID, text)
+        function PostMessage(obj, channelID, text, options)
             arguments
                 obj SlackBot
                 channelID char
                 text char
+                options.CheckChannelID = true
             end
-            % Ensure the channelID is a valid ID
-            channelID = obj.getChannelID(channelID);
+            if options.CheckChannelID
+                % Ensure the channelID is a valid ID
+                channelID = obj.getChannelID(channelID);
+            end
             obj.InitializeRequest('POST');
             obj.InitializeAPIURI('chat.postMessage');
 
@@ -329,6 +380,73 @@ classdef SlackBot < handle
 
             obj.addRequestQuery(keys, values);
             obj.SendRequest();
+        end
+        function SendDM(obj, users, text)
+            arguments
+                obj SlackBot
+                users {mustBeText}
+                text {mustBeText}
+            end
+            obj.InitializeRequest('POST');
+            obj.InitializeAPIURI('conversations.open');
+
+            text = obj.addFooter(text);
+
+            % Normalize input - should be a cell array of one or more char arrays
+            if istext(users)
+                if contains(users, ',')
+                    % This is a comma separated string - split it
+                    users = split(users, ',')';
+                end
+                if isstring(users)
+                    if length(users) > 1
+                        % Multiple elements string array
+                        % Convert to cell array of char
+                        users = arrayfun(@(x)char(x), users, 'UniformOutput', false);
+                    else
+                        % Single string - convert to char
+                        users = char(users);
+                    end
+                elseif ischar(users)
+                    users = {users};
+                end
+            end
+
+            % Convert any usernames to user ids
+            users = cellfun(@(userNameOrId)obj.getUserID(userNameOrId), users, 'UniformOutput', false);
+
+            if isempty(users)
+                % Get user with GUI
+                userInfo = obj.GetUserInfo();
+                userInfo = userInfo(~[userInfo.deleted] & ~[userInfo.is_bot]);
+                [~, sortedIdx] = sort({userInfo.name});
+                userInfo = userInfo(sortedIdx);
+                
+                [indx, tf] = listdlg(...
+                    'PromptString', {'What user(s) would you like?', 'to send a message to ?'}, ...
+                    'ListString', {userInfo.name}, ...
+                    'SelectionMode', 'multiple');
+                if ~tf || isempty(indx)
+                    % No user selection
+                    return
+                end
+                users = {userInfo(indx).name};
+            end
+            if isstring(users)
+                users = join(users, ',');
+            end
+            if iscell(users)
+                users = join(users, ',');
+                users = users{1};
+            end
+
+            obj.addRequestQuery({'users'}, {users});
+            obj.SendRequest();            
+
+            % Get DM channel ID from response
+            channelID = obj.Response.Body.Data.channel.id;
+            
+            obj.PostMessage(channelID, text, 'CheckChannelID', false);
         end
     end
     methods (Static, Access=protected)
