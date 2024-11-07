@@ -321,7 +321,9 @@ classdef SlackBot < handle
                 values{end+1} = channel;
             end
             if ~isempty(text)
+                text = SlackBot.addFooter(text);
                 keys{end+1} = 'initial_comment';
+
                 values{end+1} = text;
             end
 
