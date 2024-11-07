@@ -390,8 +390,6 @@ classdef SlackBot < handle
             obj.InitializeRequest('POST');
             obj.InitializeAPIURI('conversations.open');
 
-            text = obj.addFooter(text);
-
             % Normalize input - should be a cell array of one or more char arrays
             if istext(users)
                 if contains(users, ',')
