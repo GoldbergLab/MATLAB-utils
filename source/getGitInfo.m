@@ -1,12 +1,11 @@
-function [commitDate, commitHash, branchName, githubURL] = getGitInfo(functionNameOrPath, options)
+function [commitDate, commitHash, branchName, githubURL] = getGitInfo(functionName, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % getGitInfo: Get information about a function's git repo
 % usage: [commitDate, commitHash, branchName] = 
 %           getGitInfo(functionNameOrPath, options)
 %
 % where,
-%    functionNameOrPath is either a function name on the MATLAB path, or a
-%       path to a .m file
+%    functionName is a function name on the MATLAB path
 %    Name/Value arguments can include:
 %       CheckGit: Check if git is available on system first
 %    commitDate is the date of the current repo commit
@@ -24,7 +23,7 @@ function [commitDate, commitHash, branchName, githubURL] = getGitInfo(functionNa
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
-    functionNameOrPath char
+    functionName char
     options.CheckGit logical = false
 end
 
@@ -35,22 +34,30 @@ if options.CheckGit
     end
 end
 
-if ~exist(functionNameOrPath, 'file')
-    % It's not a valid path, maybe it's a function name
-    path = which(functionNameOrPath);
-    if isempty(path)
-        error('No function found by the name/path "%s"', functionNameOrPath);
+% Make sure it's not a builtin
+if exist(functionName, 'builtin')
+    error('function "%s" is a MATLAB builtin, not a function in a git repository.', functionName)
+end
+
+path = which(functionName);
+if ~exist(functionName, 'file') || isempty(path)
+    error('functionName (%s) must be a valid function name on the current MATLAB path.', functionName);
+end
+
+[functionDir, ~, ~] = fileparts(path);
+
+% Find base repo folder (and verify it's in a repo)
+while ~isfolder(fullfile(functionDir, '.git'))
+    oldFunctionDir = functionDir;
+    [functionDir, ~, ~] = fileparts(functionDir);
+    if strcmp(functionDir, oldFunctionDir)
+        % We're in a loop
+        error('"%s" does not appear to be in a git repository.', functionName);
     end
 end
 
-[source_path, ~, ~] = fileparts(mfilename('fullpath'));
-
-while ~isfolder(fullfile(source_path, '\.git'))
-    [source_path, ~, ~] = fileparts(source_path);
-end
-
 originalDir = pwd();
-cd(source_path)
+cd(functionDir)
 [status, commitDate] = system('git log -1 --format=%cd --date=local');
 if status ~= 0
     commitDate = '<error - unable to get commit date>';
@@ -72,3 +79,17 @@ if status ~= 0
 end
 githubURL = strtrim(githubURL);
 cd(originalDir);
+
+if nargout == 0
+    % If no outputs are requested, print information to the terminal
+    [~, functionName, ~] = fileparts(functionName);
+    fprintf('\n');
+    fprintf('Function <strong>%s</strong> git repository information:\n', functionName)
+    fprintf('\n');
+    fprintf('\t<strong>Path</strong>:              %s\n', functionDir);
+    fprintf('\t<strong>Commit timestamp</strong>:  %s\n', commitDate);
+    fprintf('\t<strong>git hash</strong>:          %s\n', commitHash(1:7));
+    fprintf('\t<strong>git branch</strong>:        %s\n', branchName);
+    fprintf('\t<strong>GitHub page</strong>:       <a href="%s">%s</a>\n', githubURL, githubURL);
+end
+    
