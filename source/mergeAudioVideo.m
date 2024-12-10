@@ -150,10 +150,15 @@ if isempty(options.ProcessingArgs)
         end
         videoFilter = videoFilter + stackFilter;
         processingArgs = ["-filter_complex", """" + videoFilter + """"];
+        processingArgs = [processingArgs, '-map', '[v]'];
+    else
+        processingArgs = [];
+        % Add map statements to tell ffmpeg which streams to output
+        for k = 1:numVideos
+            processingArgs = [processingArgs, "-map", sprintf("%d:v", k-1)];
+        end
     end
 
-    % Add map statements to tell ffmpeg which streams to output
-    processingArgs = [processingArgs, "-map", "[v]"];
     for k = 1:numAudio
         processingArgs = [processingArgs, "-map", sprintf("%d:a", numVideos+k-1)];
     end
