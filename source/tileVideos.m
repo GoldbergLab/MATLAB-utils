@@ -12,6 +12,7 @@ arguments
     options.Overwrite logical = false
     options.OutputOrder {mustBeMember(options.OutputOrder, {'SessionIdFirst', 'FileIdFirst'})} = 'SessionIdFirst'
     options.OutputRoot {mustBeText} = ''
+    options.DebugOutput logical = false
 end
 
 dryRun = options.DryRun;
@@ -75,6 +76,7 @@ end
 fprintf('%d unmatched files found\n', length(unmatchedFiles));
 
 % Merge files
+futures = parallel.Future.empty();
 for sessionIdx = 1:numSessions
     processingArgs = '';
     for fileIdx = 1:3 %size(matchedFiles{sessionIdx}, 1)
@@ -96,14 +98,39 @@ for sessionIdx = 1:numSessions
             disp(audioFiles')
             fprintf('into %s\n', outputFile)
         else
-            fprintf('Merging %d of %d\n', fileIdx, size(matchedFiles{sessionIdx}, 1));
-            [status, cmdout, command, processingArgs] = mergeAudioVideo(...
-                videoFiles, audioFiles, outputFile, ...
-                'CheckFFMPEG', false, ...
-                'Orientation', 'horizontal', ...
-                'ProcessingArgs', processingArgs);
+            fprintf('Initiating merge %d of %d\n', fileIdx, size(matchedFiles{sessionIdx}, 1));
+            if fileIdx == 1
+                [status, cmdout, command, processingArgs] = mergeAudioVideo(...
+                    videoFiles, audioFiles, outputFile, ...
+                    'CheckFFMPEG', false, ...
+                    'Orientation', 'horizontal', ...
+                    'ProcessingArgs', processingArgs);
+                if options.DebugOutput
+                    disp('status:')
+                    disp(status)
+                    disp('cmdout:')
+                    disp(cmdout)
+                    disp('command:')
+                    disp(command)
+                end
+            else
+                futures(end+1) = parfeval(@mergeAudioVideo, 4, videoFiles, audioFiles, outputFile, ...
+                    'CheckFFMPEG', false, ...
+                    'Orientation', 'horizontal', ...
+                    'ProcessingArgs', processingArgs); %#ok<AGROW> 
+            end
         end
     end
 end
 
-
+if options.DebugOutput
+    for future = futures
+        [status, cmdout, command, ~] = fetchOutputs(future);
+        disp('status:')
+        disp(status)
+        disp('cmdout:')
+        disp(cmdout)
+        disp('command:')
+        disp(command)
+    end
+end
