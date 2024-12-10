@@ -1,13 +1,21 @@
-function tileVideos(root, videoExtensions, audioExtensions, streamIdentifierRegex, sessionIdentifierRegex, fileIndexRegex, options)
+function tileVideos(root, videoExtensions, audioExtensions, streamIdentifierRegex, sessionIdentifierRegex, outputPattern, fileIndexRegex, options)
 arguments
     root
     videoExtensions {mustBeText} = {'avi', 'mp4'}
     audioExtensions {mustBeText} = {'wav', 'mp3'}
     streamIdentifierRegex char = '^([0-9a-zA-Z]*_[0-9a-zA-Z]+)'
     sessionIdentifierRegex char = '([0-9]{4}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}\-[0-9]+)'
+    outputPattern {mustBeTextScalar} = 'merged_%s_%s.mp4'
     fileIndexRegex char = '_([0-9]+)$'
     options.Recursive logical = true
+    options.DryRun logical = true
+    options.Overwrite logical = false
+    options.OutputOrder {mustBeMember(options.OutputOrder, {'SessionIdFirst', 'FileIdFirst'})} = 'SessionIdFirst'
+    options.OutputRoot {mustBeText} = ''
 end
+
+dryRun = options.DryRun;
+recursive = options.Recursive;
 
 if ischar(videoExtensions)
     videoExtensions = {videoExtensions};
@@ -30,34 +38,72 @@ if ffprobeStatus ~= 0
     error('To use tileVideos, ffprobe must be installed and available on the system path. See https://ffmpeg.org/download.html.');
 end
 
-passedOptions = namedargs2cell(options);
-[matchedFiles, unmatchedFiles] = matchFileStreams(root, streamIdentifierRegex, sessionIdentifierRegex, fileIndexRegex, passedOptions{:});
+[matchedFiles, unmatchedFiles, sessionIds, fileIds] = matchFileStreams(root, streamIdentifierRegex, sessionIdentifierRegex, fileIndexRegex, 'Recursive', recursive);
+numSessions = length(matchedFiles);
 
 if isempty(matchedFiles)
     fprintf('No matched files found, %d unmatched files found\n', length(unmatchedFiles));
     return
-else
-    fprintf('%d sessions found:\n', length(matchedFiles));
-    for sessionIdx = 1:length(matchedFiles)
-        fprintf('Session %d: Found %d matched files in %d streams, and %d unmatched files.\n', sessionIdx, length(unique(matchedFiles)), size(matchedFiles, 2), length(unmatchedFiles));
-    end
 end
+fprintf('%d sessions found\n', numSessions);
 
 % Determine which streams are video and which are audio
-videoStreamIdx = [];
-audioStreamIdx = [];
-unknownStreamIdx = [];
-unknownStreamExts = {};
-for streamIdx = 1:size(matchedFiles, 2)
-    [~, ~, ext] = fileparts(matchedFiles(1, streamIdx));
-    if any(strcmpi(ext, videoExtensions))
-        videoStreamIdx(end+1) = streamIdx;
-    elseif any(strcmpi(ext, audioExtensions))
-        audioStreamIdx(end+1) = streamIdx;
-    else
-        unknownStreamIdx(end+1) = streamIdx;
-        unknownStreamExts{end+1} = ext;
+videoStreamIdx = repmat({[]}, 1, numSessions);
+audioStreamIdx = repmat({[]}, 1, numSessions);
+unknownStreamIdx = repmat({[]}, 1, numSessions);
+unknownStreamExts = repmat({{}}, 1, numSessions);
+for sessionIdx = 1:numSessions
+    for streamIdx = 1:size(matchedFiles{sessionIdx}, 2)
+        [~, ~, ext] = fileparts(matchedFiles{sessionIdx}{1, streamIdx});
+        if any(strcmpi(ext, videoExtensions))
+            videoStreamIdx{sessionIdx}(end+1) = streamIdx;
+        elseif any(strcmpi(ext, audioExtensions))
+            audioStreamIdx{sessionIdx}(end+1) = streamIdx;
+        else
+            unknownStreamIdx{sessionIdx}(end+1) = streamIdx;
+            unknownStreamExts{sessionIdx}{end+1} = ext;
+        end
+    end
+    fprintf('\tSession %d: Found %d matched files in %d streams.\n', sessionIdx, length(uniqueRecursive(matchedFiles{sessionIdx})), size(matchedFiles{sessionIdx}, 2));
+    fprintf(...
+        '\t\tFound %d video streams, %d audio streams, and %d unknown streams: %s\n', ...
+        length(videoStreamIdx{sessionIdx}), ...
+        length(audioStreamIdx{sessionIdx}), ...
+        length(unknownStreamExts{sessionIdx}), ...
+        join(string(unknownStreamExts{sessionIdx}), ', '));
+end
+fprintf('%d unmatched files found\n', length(unmatchedFiles));
+
+% Merge files
+for sessionIdx = 1:numSessions
+    processingArgs = '';
+    for fileIdx = 1:3 %size(matchedFiles{sessionIdx}, 1)
+        videoFiles = matchedFiles{sessionIdx}(fileIdx, videoStreamIdx{sessionIdx});
+        audioFiles = matchedFiles{sessionIdx}(fileIdx, audioStreamIdx{sessionIdx});
+        switch options.OutputOrder
+            case 'SessionIdFirst'
+                outputFile = sprintf(outputPattern, sessionIds{sessionIdx}, fileIds{sessionIdx}{fileIdx});
+            case 'FileIdFirst'
+                outputFile = sprintf(outputPattern, fileIds{sessionIdx}{fileIdx}, sessionIds{sessionIdx});
+        end
+        if isempty(options.OutputRoot)
+            options.OutputRoot = fileparts(videoFiles{1});
+        end
+        outputFile = fullfile(options.OutputRoot, outputFile);
+        if dryRun
+            fprintf('Would have merged:\n');
+            disp(videoFiles')
+            disp(audioFiles')
+            fprintf('into %s\n', outputFile)
+        else
+            fprintf('Merging %d of %d\n', fileIdx, size(matchedFiles{sessionIdx}, 1));
+            [status, cmdout, command, processingArgs] = mergeAudioVideo(...
+                videoFiles, audioFiles, outputFile, ...
+                'CheckFFMPEG', false, ...
+                'Orientation', 'horizontal', ...
+                'ProcessingArgs', processingArgs);
+        end
     end
 end
 
-fprintf('Found %d video streams, %d audio streams, and %d unknown streams: %s\n', length(videoStreamIdx), length(audioStreamIdx), length(unknownStreamExts), join(string(unknownStreamExts), ', '));
+

@@ -1,4 +1,4 @@
-function [matchedFiles, unmatchedFiles] = matchFileStreams(root, streamIdentifierRegex, sessionIdentifierRegex, fileIndexRegex, options)
+function [matchedFiles, unmatchedFiles, allSessionIds, fileIds] = matchFileStreams(root, streamIdentifierRegex, sessionIdentifierRegex, fileIndexRegex, options)
 arguments
     root char
     streamIdentifierRegex char
@@ -42,10 +42,13 @@ numSessionIds = length(allSessionIds);
 %   matchedFiles{k, :, j} will represent all the files that are matched as
 %   the kth file in their respective streams for session j
 matchedFiles = repmat({repmat({''}, [numFileIdx, numStreamIds])}, [1, numSessionIds]);
+% Keep track of file IDs
+fileIds = repmat({repmat({''}, [1, numFileIdx])}, [1, numSessionIds]);
 for sessionIdx = 1:numSessionIds
     sessionId = allSessionIds{sessionIdx};
     for fileIdx = 1:numFileIdx
         fileId = allFileIdx{fileIdx};
+        fileIds{sessionIdx}{fileIdx} = fileId;
         for streamIdx = 1:numStreamIds
             files = sortedFilepaths{streamIdx}(strcmp(streamFileIndices{streamIdx}, fileId) & strcmp(sessionFileIds{streamIdx}, sessionId));
             if ~isempty(files)
@@ -66,6 +69,7 @@ for sessionIdx = 1:numSessionIds
     unmatchedFiles = [unmatchedFiles; unique(matchedFiles{sessionIdx}(unmatchedRows, :))]; %#ok<AGROW> 
     % Remove any rows that have one or more matches missing
     matchedFiles{sessionIdx}(unmatchedRows, :) = [];
+    fileIds{sessionIdx}(unmatchedRows) = [];
 end
 
 end
