@@ -1,12 +1,52 @@
-function tileVideos(root, videoExtensions, audioExtensions, streamIdentifierRegex, sessionIdentifierRegex, outputPattern, fileIndexRegex, options)
+function tileVideos(root, videoExtensions, audioExtensions, streamIdentifierRegex, sessionIdentifierRegex, fileIndexRegex, outputPattern, options)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% tileVideos: Batch combine multiple video/audio streams across sessions
+% usage: tileVideos(root, videoExtensions, audioExtensions, 
+%   streamIdentifierRegex, sessionIdentifierRegex, outputPattern, 
+%   fileIndexRegex, Name, Value, ...)
+%
+% where,
+%    root is the path to the root folder containing audio and video files 
+%       or subfolders containing them
+%    videoExtensions is a cell array of one or more expected file 
+%       extensions for video files within root
+%    audioExtensions is a cell array of one or more expected file
+%       extensions for audio files within root
+%    streamIdentifierRegex is a regular expression with a single capturing
+%       group, in which the capturing group will uniquely select a series 
+%       of characters in each audio or video file that will identify which
+%       audio/video stream that file belongs to.
+%    sessionIdentifierRegex is a regular expression with a single capturing
+%       group, in which the capturing group will uniquely select a series 
+%       of characters in each audio or video file that will identify which
+%       recording session that file belongs to.
+%    fileIndexRegex is <description>
+%    outputPattern is a format string (not regex) comprehensible by
+%       sprintf that will construct the desired output filename for a 
+%       merged file. The format string should accept two string values 
+%       which represent the session id and file id extracted from each 
+%       merged file. The order of those two is determined based on the 
+%       value of the 'OutputOrder' argument
+%    options is <description>
+%    tileVideo is <description>
+%
+% <long description>
+%
+% See also: <related functions>
+%
+% Version: 1.0
+% Author:  Brian Kardon
+% Email:   bmk27=cornell*org, brian*kardon=google*com
+% Real_email = regexprep(Email,{'=','*'},{'@','.'})
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
     root
     videoExtensions {mustBeText} = {'avi', 'mp4'}
     audioExtensions {mustBeText} = {'wav', 'mp3'}
     streamIdentifierRegex char = '^([0-9a-zA-Z]*_[0-9a-zA-Z]+)'
     sessionIdentifierRegex char = '([0-9]{4}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}\-[0-9]+)'
-    outputPattern {mustBeTextScalar} = 'merged_%s_%s.mp4'
     fileIndexRegex char = '_([0-9]+)$'
+    outputPattern {mustBeTextScalar} = 'merged_%s_%s.mp4'
     options.Recursive logical = true
     options.DryRun logical = true
     options.Overwrite logical = false
