@@ -20,19 +20,38 @@ function tileVideos(root, videoExtensions, audioExtensions, streamIdentifierRege
 %       group, in which the capturing group will uniquely select a series 
 %       of characters in each audio or video file that will identify which
 %       recording session that file belongs to.
-%    fileIndexRegex is <description>
+%    fileIndexRegex is a regular expression with a single capturing
+%       group, in which the capturing group will uniquely select a series 
+%       of characters in each audio or video file that will identify which
+%       recording file number within the session the file represents.
 %    outputPattern is a format string (not regex) comprehensible by
 %       sprintf that will construct the desired output filename for a 
 %       merged file. The format string should accept two string values 
 %       which represent the session id and file id extracted from each 
 %       merged file. The order of those two is determined based on the 
-%       value of the 'OutputOrder' argument
-%    options is <description>
-%    tileVideo is <description>
+%       value of the 'OutputOrder' argument.
+%    Name/Value arguments can include:
+%       Recursive: true or false (default true) - should tileVideos search 
+%           subdirectories of the root folder or not?
+%       DryRun: true or false (default true) - actually merge, or just 
+%           output a description of what would have been done?
+%       Overwrite: true or false (default false) - should files be 
+%           overwritten if the output file already exists?
+%       OutputOrder: 'SessionIdFirst' or 'FileIdFirst' (default 
+%           'SessionIdFirst'). Which order does the outputPattern format 
+%           string accept arguments?
+%       OutputRoot: Which directory should output files be placed in? 
+%           Default is whichever directory the first video stream is found
+%           in.
+%       DebugOutput: true or false - should ffmpeg output be printed to the
+%           the console?
 %
-% <long description>
+% This function is designed to batch process one or more video streams, 
+%   zero or more audio streams, across one or more sessions, taking each 
+%   set of corresponding audio/video files and merging them by stacking
+%   the videos, and combining the audio.
 %
-% See also: <related functions>
+% See also: matchFileStreams, mergeAudioVideo, VideoReaderAsync
 %
 % Version: 1.0
 % Author:  Brian Kardon
@@ -157,7 +176,8 @@ for sessionIdx = 1:numSessions
                 futures(end+1) = parfeval(@mergeAudioVideo, 4, videoFiles, audioFiles, outputFile, ...
                     'CheckFFMPEG', false, ...
                     'Orientation', 'horizontal', ...
-                    'ProcessingArgs', processingArgs); %#ok<AGROW> 
+                    'ProcessingArgs', processingArgs, ...
+                    'Overwrite', options.Overwrite); %#ok<AGROW> 
             end
         end
     end

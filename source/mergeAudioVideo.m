@@ -26,6 +26,8 @@ function [status, cmdout, command, processingArgs] = mergeAudioVideo(videoPaths,
 %       VideoEncodingArgs - a char array telling ffmpeg what video codec
 %           and codec parameters to use. Default is 
 %           ["-c:v", "libx264", "-crf", "25"]
+%       Overwrite - true or false (default false) should the output file
+%           overwrite a file if it already exists?
 %    status is the status output code of the ffmpeg command
 %    cmdout is the captured output of the ffmpeg command
 %    command is the ffmpeg command used
@@ -50,6 +52,7 @@ arguments
     options.Orientation {mustBeMember(options.Orientation, {'horizontal', 'vertical'})} = 'horizontal'
     options.ProcessingArgs {mustBeText} = string.empty()
     options.VideoEncodingArgs {mustBeText} = ["-c:v", "libx264", "-crf", "25"]
+    options.Overwrite logical = false
 end
 
 if isempty(videoPaths)
@@ -165,6 +168,13 @@ if isempty(options.ProcessingArgs)
 else
     % Use supplied processing arguments
     processingArgs = options.ProcessingArgs;
+end
+
+% Check if we should overwrite or not
+if ~options.Overwrite
+    if exist(outputPath, "file")
+        fprintf('Skipping %s because it already exists, and Overwrite is false.', outputPath);
+    end
 end
 
 % Construct ffmpeg command
