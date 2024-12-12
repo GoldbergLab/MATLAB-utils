@@ -21,7 +21,7 @@ function absolutePath = getAbsolutePath(path)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if ~exist(path, 'file')
-    error(['The given path ', path, ' does not appear to exist.']);
+    error('getAbsolutePath:pathDoesNotExist', 'The given path %s does not appear to exist.', path);
 end
 [p, n, e] = fileparts(path);
 w = what(p);

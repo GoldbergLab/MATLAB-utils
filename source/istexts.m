@@ -1,11 +1,14 @@
-function tf = istext(A)
+function tf = istexts(A)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% istext: check if input is a text scalar (char array or a 1x1 string)
-% usage:  tf = istext(A)
+% istext: check if input is a 1D text array
+% usage:  tf = istexts(A)
 %
 % where,
 %    A is the input to check
 %    tf is a logical indicating whether or not the input is a char/string
+%
+% Check if input is a 1D text array (cell array of char arrays or a 1xN or
+%   Nx1 string)
 %
 % See also: ischar, isstring, iscellstr
 %
@@ -15,4 +18,4 @@ function tf = istext(A)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-tf = (ischar(A) && isvector(A)) || (isstring(A) && length(A) == 1);
+tf = (iscell(A) && all(cellfun(@ischar, A))) || (isstring(A) && isvector(A));
