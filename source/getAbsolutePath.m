@@ -28,4 +28,5 @@ w = what(p);
 if isempty(w)
     error(['The directory of the given path ', p, ' does not appear to exist on this system.']);
 end
-absolutePath = fullfile(w.path, [n, e]);
+name = string(n) + string(e);
+absolutePath = fullfile(w.path, name);
