@@ -208,8 +208,10 @@ classdef Path
                 end
             end
         end
-%         function resolve(path1)
-%         end
+        function pathOut = resolve(path1)
+            pathOut = Path(path1);
+            pathOut.str = resolvePath(pathOut.str);
+        end
 %         function readlink(path1)
 %         end
         function stats = stat(path1)
