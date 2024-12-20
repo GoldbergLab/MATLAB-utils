@@ -3,8 +3,9 @@ function fig = removeUIPanels(fig)
 % children of uipanels
 
 panelsToRemove = gobjects().empty();
-for k = 1:length(fig.Children)
-    child = fig.Children(k);
+originalChildren = fig.Children;
+for k = 1:length(originalChildren)
+    child = originalChildren(k);
     if isa(child, 'matlab.ui.container.Panel')
         panel = child;
         panelChildren = panel.Children;
