@@ -44,7 +44,7 @@ classdef Path
             
             pathString = string(pathString);
             pathOut.Segments = split(pathString, pathOut.Separator)';
-            if ~isempty(pathOut.Segments) && pathOut.isDrive(pathOut.Segments(1))
+            if ~isempty(pathOut.Segments) && pathOut.is_drive(pathOut.Segments(1))
                 % Fix root segment to include separator, because that's the way that's supposed to work...
                 pathOut.Segments(1) = pathOut.Segments(1) + pathOut.Separator;
             end
@@ -107,10 +107,13 @@ classdef Path
 %         end
     end
     methods
+        function swap_drive(obj, new_drive):
+
+        end
 %         function as_posix(path1)
 %         end
         function absolute = is_absolute(path1)
-            absolute = path1.isSegmentRoot(1);
+            absolute = path1.is_segment_root(1);
         end
 %         function is_relative_to(path1)
 % 
@@ -252,7 +255,7 @@ classdef Path
 %         function is_junction(path1)
 %         end
         function out = is_mount(path1)
-            out = length(path1.Segments) == 1 && path1.isSegmentRoot(1);
+            out = length(path1.Segments) == 1 && path1.is_segment_root(1);
         end
 %         function is_socket(path1)
 %         end
@@ -372,21 +375,21 @@ classdef Path
     end
     methods % Getters
         function drive = get.drive(path1)
-            if path1.isSegmentRoot(1)
+            if path1.is_segment_root(1)
                 drive = strrep(path1.Segments(1), path1.Separator, "");
             else
                 drive = "";
             end
         end
         function root = get.root(path1)
-            if path1.isSegmentRoot(1)
+            if path1.is_segment_root(1)
                 root = path1.Separator;
             else
                 root = "";
             end
         end
         function anchor = get.anchor(path1)
-            if path1.isSegmentRoot(1)
+            if path1.is_segment_root(1)
                 anchor = path1.Segments(1);
             else
                 anchor = "";
@@ -408,7 +411,7 @@ classdef Path
             end
         end
         function name = get.name(path1)
-            if isempty(path1.Segments) || path1.isSegmentRoot()
+            if isempty(path1.Segments) || path1.is_segment_root()
                 name = "";
             else
                 name = path1.Segments(end);
@@ -438,7 +441,7 @@ classdef Path
         end
         function str = get.str(path1)
             segments = path1.Segments;
-            if path1.isSegmentRoot(1)
+            if path1.is_segment_root(1)
                 segments(1) = strrep(segments(1), path1.Separator, "");
             end
             str = join(segments, path1.Separator);
@@ -471,7 +474,7 @@ classdef Path
             pathOut = path1;
             pathOut.Segments = [path1.Segments, path2.Segments];
         end
-        function isRoot = isSegmentRoot(path1, segmentIdx)
+        function isRoot = is_segment_root(path1, segmentIdx)
             arguments
                 path1 Path
                 segmentIdx = length(path1.Segments)
@@ -484,16 +487,16 @@ classdef Path
                     isRoot = strcmp(segment, '/');
             end
         end
-        function isDrive = isDrive(path1, str)
+        function is_drive = is_drive(path1, str)
             arguments
                 path1 Path
                 str {mustBeTextScalar}
             end
             switch path1.Flavor
                 case "Windows"
-                    isDrive = length(regexp(str, '^[a-zA-Z]\:$')) == 1;
+                    is_drive = length(regexp(str, '^[a-zA-Z]\:$')) == 1;
                 case "Posix"
-                    isDrive = isempty(str);
+                    is_drive = isempty(str);
             end            
         end
 %         function segmentIdx = parseSegmentIdx(path1, segmentIdx)
