@@ -107,9 +107,6 @@ classdef Path
 %         end
     end
     methods
-        function swap_drive(obj, new_drive):
-
-        end
 %         function as_posix(path1)
 %         end
         function absolute = is_absolute(path1)
@@ -447,6 +444,54 @@ classdef Path
             str = join(segments, path1.Separator);
         end
     end
+    methods % Setters
+        function path1 = set.drive(path1, new_drive)
+            if ~path1.is_drive(new_drive)
+                error('Not a valid %s drive: %s', path1.Flavor, new_drive)
+            end
+            if path1.is_segment_root(1)
+                switch path1.Flavor
+                    case "Windows"
+                        path1.Segments(1) = new_drive + "\";
+                    case "Posix"
+                end
+            else
+                error('Path is not rooted in a drive.')
+            end
+        end
+        function path1 = set.name(path1, new_name)
+            if isempty(path1.Segments) || path1.is_segment_root()
+                error('Path has no name.')
+            else
+                if Path.is_valid_name(new_name)
+                    path1.Segments(end) = new_name;
+                else
+                    error('Invalid name: %s', new_name);
+                end
+            end
+        end
+        function path1 = set.suffix(path1, new_suffix)
+            arguments
+                path1 Path
+                new_suffix {mustBeTextScalar}
+            end
+            new_suffix = string(new_suffix);
+
+            if ~Path.is_valid_name(new_suffix)
+                error('Invalid suffix: %s', new_suffix);
+            end
+            if extractBefore(new_suffix, 2) ~= "."
+                new_suffix = "." + new_suffix;
+            end
+
+            [~, stem, ~] = fileparts(path1.name); %#ok<*PROPLC,*PROP> 
+            if isempty(stem)
+                path1.name = path1.name + new_suffix;
+            else
+                path1.name = stem + new_suffix;
+            end
+        end
+    end
     methods (Access = private)
         function pathOut = prepend(path1, pathOrSegments)
             arguments
@@ -512,6 +557,9 @@ classdef Path
         function mkdir(path1)
             path1 = Path(path1);
             mkdir(path1.str);
+        end
+        function valid = is_valid_name(name)
+            valid = isempty(regexp(name, '[/\\*:?"<>|]', 'once'));
         end
 %         function touch(path1)
 %             path1 = Path(path1);
