@@ -34,8 +34,8 @@ arguments
     options.CheckFFmpeg logical = true
     options.CheckFFprobe logical = true
     options.CheckFFplay logical = true
-    options.IssueWarning logical = true
-    options.IssueError logical = true
+    options.IssueWarning logical = false
+    options.IssueError logical = false
 end
 
 if options.CheckFFmpeg

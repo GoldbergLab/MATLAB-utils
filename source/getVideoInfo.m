@@ -53,14 +53,7 @@ videoInfo.path = path;
 
 if options.SystemCheck
     % Check if ffprobe is available on this system. Warn user if not.
-    [ffprobeStatus, ~] = system('where /q ffprobe');
-    
-    if ffprobeStatus ~= 0
-        ffprobeExists = false;
-        warning('No ffprobe found - for full getVideoInfo functionality, ffprobe must be installed and available on the system path. See https://ffmpeg.org/download.html. Basic functionality will be provided through the MATLAB function ''VideoReader''.');
-    else
-        ffprobeExists = true;
-    end
+    [~, ffprobeExists, ~] = checkFFmpeg('CheckFFprobe', true, 'CheckFFmpeg', false, 'CheckFFplay', false, 'IssueWarning', true);
 else
     ffprobeExists = options.FfprobeAvailable;
 end
