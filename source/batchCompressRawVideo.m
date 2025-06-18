@@ -51,11 +51,24 @@ parfor k = 1:length(videos)
 
     % Construct compressed filename
     [root, name, ext] = fileparts(videoPath);
-    compressedVideoPath = fullfile(root, [name, options.CompressedVideoTag, ext]);
+    compressedVideoPath = fullfile(root, [name, options.CompressedVideoTag, ext]); %#ok<PFBNS>
     try
         if ~options.DryRun
             % Not a dry run, compress the video
+            if strcmp(videoPath, compressedVideoPath)
+                % Original and compressed paths are the same, gotta do a dance
+                nameSwap = true;
+                finalCompressedVideoPath = compressedVideoPath;
+                [root, name, ext] = fileparts(compressedVideoPath);
+                compressedVideoPath = fullfile(root, [name, '_TEMP_COMPRESSED_', char(datetime('today')), ext]);
+            else
+                nameSwap = false;
+            end
             compressRawVideo(videoPath, compressedVideoPath, "CheckFFmpeg", false, "CRF", options.CRF, "VerifyRaw", true, 'OverWrite', options.OverWrite);
+            if nameSwap
+                % Overwrite original
+                movefile(compressedVideoPath, finalCompressedVideoPath);
+            end
         else
             % Dry run, print what would have been done
             fprintf('DRY RUN: Would have converted\n\t%s \n\t\tto \n\t%s\n', videoPath, compressedVideoPath);
