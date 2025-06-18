@@ -1,4 +1,35 @@
 function batchCompressRawVideo(videoRoot, options)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% batchCompressRawVideo: <short description>
+% usage: bbatchCompressRawVideo(videoRoot, "Name", "Value", ...)
+%
+% where,
+%    videoRoot is <description>
+%    Name/Value pairs can be:
+%       VideoExtension: The video extension to look for. Default is "avi"
+%       CRF: The h264 "constant rate factor". 0 is lossless, 52 is max
+%           compression. ~23 is generally a good balance between size and 
+%           quality
+%       SearchSubdirectories: A logical indicating whether or not to search
+%           for video files recursively. Default is false
+%       CompressedVideoTag: A tag to add to the filename before the 
+%           extension when writing the compressed videos. Default is ''
+%       DryRun: A logical indicating whether or not to do a dry run, which
+%           will print out what the command would have done, rather than
+%           actually converting any videos. Default is true.
+%       Overwrite: A logical indicating whether or not to overwrite files 
+%           that already exist. Default is false.
+%
+% This function is designed to batch convert videos encoded with the
+%   "rawvideo" codec to a compressed video format.
+%
+% See also: compressRawVideo
+%
+% Version: 1.0
+% Author:  Brian Kardon
+% Email:   bmk27=cornell*org, brian*kardon=google*com
+% Real_email = regexprep(Email,{'=','*'},{'@','.'})
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
     videoRoot {mustBeTextScalar}
     options.VideoExtension {mustBeTextScalar} = 'avi'
@@ -10,6 +41,7 @@ arguments
 end
 
 % Get list of videos with that extension
+options.VideoExtension = regexprep(options.VideoExtension, '[^a-zA-Z0-9]', '');
 videos = findFiles(videoRoot, ['.*\.', options.VideoExtension], "SearchSubdirectories", options.SearchSubdirectories);
 
 % Loop over videos
