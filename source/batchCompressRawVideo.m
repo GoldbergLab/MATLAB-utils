@@ -93,20 +93,20 @@ compressedVideoPath = fullfile( ...
     [name, options.CompressedVideoTag, ext] ...
     );
 try
+    if strcmp(videoPath, compressedVideoPath)
+        % Original and compressed paths are the same, gotta do a dance
+        nameSwap = true;
+        finalCompressedVideoPath = compressedVideoPath;
+        [root, name, ext] = fileparts(compressedVideoPath);
+        compressedVideoPath = fullfile( ...
+            root, ...
+            [name, '_TEMP_COMPRESSED_', char(datetime('today')), ext] ...
+            );
+    else
+        nameSwap = false;
+    end
     if ~options.DryRun
         % Not a dry run, compress the video
-        if strcmp(videoPath, compressedVideoPath)
-            % Original and compressed paths are the same, gotta do a dance
-            nameSwap = true;
-            finalCompressedVideoPath = compressedVideoPath;
-            [root, name, ext] = fileparts(compressedVideoPath);
-            compressedVideoPath = fullfile( ...
-                root, ...
-                [name, '_TEMP_COMPRESSED_', char(datetime('today')), ext] ...
-                );
-        else
-            nameSwap = false;
-        end
         compressRawVideo( ...
             videoPath, ...
             compressedVideoPath, ...
@@ -115,12 +115,15 @@ try
             "VerifyRaw", true, ...
             'OverWrite', options.OverWrite ...
             );
-        if nameSwap
-            % Overwrite original
+    end
+    if nameSwap
+        % Overwrite original
+        if ~options.DryRun
             movefile(compressedVideoPath, finalCompressedVideoPath);
-            compressedVideoPath = finalCompressedVideoPath;
         end
-    else
+        compressedVideoPath = finalCompressedVideoPath;
+    end
+    if options.DryRun
         % Dry run, print what would have been done
         fprintf( ...
             'DRY RUN: Would have converted\n\t%s \n\t\tto \n\t%s\n', ...
