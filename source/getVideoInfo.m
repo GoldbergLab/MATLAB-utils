@@ -65,7 +65,7 @@ if ffprobeExists
     
     % Check if ffprobe threw an error
     if status ~= 0
-        error('ffprobe error: %s', status);
+        error('ffprobe error: %d\n%s\n', status, stdout);
     end
     
     % Parse properties
