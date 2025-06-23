@@ -36,7 +36,7 @@ arguments
     options.OverWrite logical = false
 end
 
-success = False;
+success = false;
 
 % Check if input and output paths are the same
 if strcmp(videoPath, compressedVideoPath)
@@ -63,10 +63,9 @@ end
 
 if options.VerifyRaw
     % Check that video is already encoded with the rawvideo codec
-    info = getVideoInfo(videoPath, 'SystemCheck', false, 'FfprobeAvailable', true);
-    codec = info.raw_info.codec_name;
-    if ~strcmp(codec, 'rawvideo')
-        error('MATLAB_utils:notRawVideo', 'Video is encoded with %s codec, not rawvideo, aborting: %s', codec, videoPath);
+    [isRaw, videoCodec] = isRawVideo(videoPath, 'SystemCheck', false);
+    if ~isRaw
+        error('MATLAB_utils:notRawVideo', 'Video is encoded with %s codec, not rawvideo, aborting: %s', videoCodec, videoPath);
     end
 end
 
