@@ -19,7 +19,7 @@ function record = batchCompressRawVideo(videoRoot, options)
 %       DryRun: A logical indicating whether or not to do a dry run, which
 %           will print out what the command would have done, rather than
 %           actually converting any videos. Default is true.
-%       Overwrite: A logical indicating whether or not to overwrite files 
+%       OverWrite: A logical indicating whether or not to overwrite files 
 %           that already exist. Default is false.
 %       Parallelize: A logical indicating whether or not to batch convert
 %           in parallel or not. Default is true.
@@ -82,10 +82,17 @@ if options.RecordNameOnly
     end
 end
 
+if options.DryRun && options.Parallelize
+    warning('It is recommened to turn off Parallelize when using DryRun, due to possible scrambling of output order.');
+end
+
 function record = compressSingleVideo(videos, k, options)
 fprintf('Converting %d of %d\n', k, length(videos));
 videoPath = videos{k};
-record = {videoPath, ''};
+
+% Initialize record
+record = {videoPath, '*SKIPPED*'};
+
 % Construct compressed filename
 [root, name, ext] = fileparts(videoPath);
 compressedVideoPath = fullfile( ...
@@ -93,18 +100,6 @@ compressedVideoPath = fullfile( ...
     [name, options.CompressedVideoTag, ext] ...
     );
 try
-    if strcmp(videoPath, compressedVideoPath)
-        % Original and compressed paths are the same, gotta do a dance
-        nameSwap = true;
-        finalCompressedVideoPath = compressedVideoPath;
-        [root, name, ext] = fileparts(compressedVideoPath);
-        compressedVideoPath = fullfile( ...
-            root, ...
-            [name, '_TEMP_COMPRESSED_', char(datetime('today')), ext] ...
-            );
-    else
-        nameSwap = false;
-    end
     if ~options.DryRun
         % Not a dry run, compress the video
         compressRawVideo( ...
@@ -115,28 +110,27 @@ try
             "VerifyRaw", true, ...
             'OverWrite', options.OverWrite ...
             );
-    end
-    if nameSwap
-        % Overwrite original
-        if ~options.DryRun
-            movefile(compressedVideoPath, finalCompressedVideoPath);
-        end
-        compressedVideoPath = finalCompressedVideoPath;
-    end
-    if options.DryRun
+    else
         % Dry run, print what would have been done
-        fprintf( ...
-            'DRY RUN: Would have converted\n\t%s \n\t\tto \n\t%s\n', ...
-            videoPath, ...
-            compressedVideoPath ...
-            );
+        if strcmp(videoPath, compressedVideoPath) && ~options.OverWrite
+            fprintf( ...
+                'DRY RUN: Would have skipped converting\n\t%s \n\t\tto \n\t%s\nbecause that output path already exists, and user requested no overwrite.\n\n', ...
+                videoPath, ...
+                compressedVideoPath ...s
+                );
+        else
+            fprintf( ...
+                'DRY RUN: Would have converted\n\t%s \n\t\tto \n\t%s\n\n', ...
+                videoPath, ...
+                compressedVideoPath ...
+                );
+        end
     end
     record{2} = compressedVideoPath;
 catch ME
     if strcmp(ME.identifier, 'MATLAB_utils:notRawVideo')
         % Video is not encoded with rawvideo codec, skip it
         warning('Skipping non-raw video: %s', videoPath);
-        record{2} = '*SKIPPED*';
     else
         rethrow(ME)
     end

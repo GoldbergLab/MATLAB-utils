@@ -1,4 +1,4 @@
-function compressRawVideo(videoPath, compressedVideoPath, options)
+function success = compressRawVideo(videoPath, compressedVideoPath, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % compressRawVideo: compress a raw video with ffmpeg
 % usage: compressRawVideo(videoPath, compressedVideoPath, options)
@@ -7,6 +7,8 @@ function compressRawVideo(videoPath, compressedVideoPath, options)
 %    videoPath is the path to the video file
 %    compressedVideoPath is the path where the compressed video should be
 %       written to
+%    success is a logical indicating whether the compression operation
+%       seems to have succeeded or not.
 %    Name/Value options:
 %       CRF is the h264 "constant rate factor". 0 is lossless, 52 is max
 %           compression. ~23 is generally a good balance between size and 
@@ -32,6 +34,26 @@ arguments
     options.VerifyRaw logical = true
     options.CheckFFmpeg logical = false
     options.OverWrite logical = false
+end
+
+success = False;
+
+% Check if input and output paths are the same
+if strcmp(videoPath, compressedVideoPath)
+    if ~options.OverWrite
+        % User requested no overwrite, skip this one.
+        return;
+    end
+    % Original and compressed paths are the same, gotta do a dance
+    nameSwap = true;
+    finalCompressedVideoPath = compressedVideoPath;
+    [root, name, ext] = fileparts(compressedVideoPath);
+    compressedVideoPath = fullfile( ...
+        root, ...
+        [name, '_TEMP_COMPRESSED_', char(datetime('today')), ext] ...
+        );
+else
+    nameSwap = false;
 end
 
 if options.CheckFFmpeg
@@ -64,3 +86,11 @@ if status ~= 0
     % Error occurred with conversion
     error(cmdout);
 end
+
+
+if nameSwap
+    % Overwrite original
+    movefile(compressedVideoPath, finalCompressedVideoPath);
+end
+
+success = True;
