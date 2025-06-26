@@ -28,9 +28,13 @@ function record = batchCompressRawVideo(videoRoot, options)
 %           Default is true.
 %
 % This function is designed to batch convert videos encoded with the
-%   "rawvideo" codec to a compressed video format.
+%   "rawvideo" codec to a compressed video format. 
+% IMPORTANT NOTE: If you are trying to convert the videos "in-place" 
+%   (not to a different filename), this function will create a temporary
+%   file, then delete it soon after. Do not attempt to delete or touch
+%   these temporary files, or your original video may be lost.
 %
-% See also: compressRawVideo
+% See also: compressRawVideo, isRawVideo
 %
 % Version: 1.0
 % Author:  Brian Kardon

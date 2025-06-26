@@ -20,7 +20,7 @@ function success = compressRawVideo(videoPath, compressedVideoPath, options)
 %
 % Take a raw video and use ffmpeg to re-encode it with compression
 %
-% See also: batchCompressRawVideo, getVideoInfo
+% See also: batchCompressRawVideo, isRawVideo, getVideoInfo
 %
 % Version: 1.0
 % Author:  Brian Kardon
@@ -92,4 +92,4 @@ if nameSwap
     movefile(compressedVideoPath, finalCompressedVideoPath);
 end
 
-success = True;
+success = true;
