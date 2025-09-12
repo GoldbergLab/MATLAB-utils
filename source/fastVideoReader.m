@@ -1,4 +1,10 @@
-function videoData = fastVideoReader(videoPath, numChannels)
+function videoData = fastVideoReader(videoPath, numChannels, frames, cropBox)
+arguments
+    videoPath (1, :) char     % Path to video file
+    numChannels double = []   % Number of color channels to expect
+    frames double = []        % List of frames to load
+    cropBox double = []       % [x, y, w, h] box to crop video
+end
 % Check that ffmpeg and ffprobe exist on system path
 [ffmpegStatus, ~] = system('where /q ffmpeg');
 if ffmpegStatus ~= 0
@@ -17,9 +23,13 @@ end
 ffmpegVideoShape = arrayfun(@str2double, strsplit(strtrim(cmdout), ','));
 videoWidth = ffmpegVideoShape(1);
 videoHeight = ffmpegVideoShape(2);
-numFrames = ffmpegVideoShape(3);
+if isempty(frames)
+    numFrames = ffmpegVideoShape(3);
+else
+    numFrames = length(frames);
+end
 
-if ~exist('numChannels', 'var') || isempty(numChannels)
+if isempty(numChannels)
     % Attempt to use ffprobe to determine channel count
     try
         % Get pix_fmt from video header
@@ -42,6 +52,16 @@ if ~exist('numChannels', 'var') || isempty(numChannels)
         disp(getReport(ME));
         error('Failed to automatically extract number of channels from video using ffprobe.');
     end
+end
+
+if ~isempty(cropBox)
+    % User requests video cropping
+    % Translate crop box into ffmpeg argument:
+    cropArg = sprintf('-vf "crop=%d:%d:%d:%d"', cropBox(3), cropBox(4), cropBox(1), cropBox(2));
+    videoWidth = cropBox(4);
+    videoHeight = cropBox(3);
+else
+    cropArg = '';
 end
 
 % Determine desired output pixel format, construct corresponding videoSize vector
@@ -94,7 +114,14 @@ if ~no_mmap
     fclose(fileID);
     try
         mmap = memmapfile(tempFilePath);
-        cmd = sprintf('ffmpeg -i "%s" -an -vsync 0 -f rawvideo -pix_fmt %s -v error -y %s', videoPath, fmt, tempFilePath);
+
+        if isempty(frames)
+            cmd = sprintf('ffmpeg -i "%s" %s -an -vsync 0 -f rawvideo -pix_fmt %s -v error -y %s', videoPath, cropArg, fmt, tempFilePath);
+        else
+            frameFilter = makeFrameFilterExpression(frames);
+            cmd = sprintf('ffmpeg -i "%s" %s -an -vsync 0 -vf select=''%s'' -f rawvideo -pix_fmt %s -v error -y %s', videoPath, cropArg, frameFilter, fmt, tempFilePath);
+        end
+        disp(cmd)
         [status,cmdout] = system(cmd);
         if status ~= 0
             error(cmdout);
@@ -157,7 +184,13 @@ elseif ~no_tcp
 
         % Use ffmpeg to decode file to raw bytes and send them over via
         % loopback 
-        cmd = sprintf('START /B ffmpeg -i "%s" -an -vsync 0 -f rawvideo -pix_fmt %s -send_buffer_size %d -loglevel quiet -y tcp://%s:%d', videoPath, fmt, bufferBytes, tcpAddress, tcpPort);
+        if isempty(frames)
+            cmd = sprintf('START /B ffmpeg -i "%s" -an -vsync 0 -f rawvideo -pix_fmt %s -send_buffer_size %d -loglevel quiet -y tcp://%s:%d', videoPath, fmt, bufferBytes, tcpAddress, tcpPort);
+        else
+            frameFilter = makeFrameFilterExpression(frames);
+            cmd = sprintf('START /B ffmpeg -i "%s" -an -vsync 0 -vf select=''%s'' -f rawvideo -pix_fmt %s -send_buffer_size %d -loglevel quiet -y tcp://%s:%d', videoPath, frameFilter, fmt, bufferBytes, tcpAddress, tcpPort);
+        end
+        disp(cmd)
         [status,cmdout] = system(cmd);
         if status ~= 0
             error(cmdout);
@@ -186,7 +219,13 @@ else
     end
     
     % Use ffmpeg to convert file to raw bytes
-    cmd = sprintf('ffmpeg -i "%s" -an -vsync 0 -f rawvideo -pix_fmt %s -v error -y "%s"', videoPath, fmt, tempFilePath);
+
+    if isempty(frames)
+        cmd = sprintf('ffmpeg -i "%s" %s -an -vsync 0 -f rawvideo -pix_fmt %s -v error -y "%s"', videoPath, cropArg, fmt, tempFilePath);
+    else
+        frameFilter = makeFrameFilterExpression(frames);
+        cmd = sprintf('ffmpeg -i "%s" %s -an -vsync 0 -vf select=''%s'' -f rawvideo -pix_fmt %s -v error -y "%s"', videoPath, cropArg, frameFilter, fmt, tempFilePath);
+    end
     [status,cmdout] = system(cmd);
     if status ~= 0
         error(cmdout);
@@ -263,7 +302,7 @@ function videoData = tcpChunkReader(server, numFrames, rawFrameShape, framePermu
         displayProgress('%d of %d frames read\n', k, numFrames, 10);
         videoData(numFrameBytes*(k-1)+1:numFrameBytes*k) = readFrame(server, rawFrameShape, framePermuteOrder);
     end
-
+    
 % 
 %     doubleBytes = 8;
 % 
@@ -294,4 +333,10 @@ function videoData = tcpChunkReader(server, numFrames, rawFrameShape, framePermu
 %         videoData(frameBytes*numChunks + remainderChunkSize + 1:end) = typecast(server.read(remainderBytes, 'uint8'), 'uint8');
 %     end
 %     disp('Done reading');
+end
+
+function frameFilter = makeFrameFilterExpression(frames)
+    filterExpressions = arrayfun(@(f)sprintf('eq(n\\,%d)', f), frames, 'UniformOutput', false);
+    frameFilter = join(filterExpressions, '+');
+    frameFilter = frameFilter{1};
 end
