@@ -57,7 +57,7 @@ end
 if ~isempty(cropBox)
     % User requests video cropping
     % Translate crop box into ffmpeg argument:
-    cropArg = sprintf('-vf "crop=%d:%d:%d:%d"', cropBox(3), cropBox(4), cropBox(1), cropBox(2));
+    cropArg = sprintf('-vf "crop=%d:%d:%d:%d:exact=1"', cropBox(3), cropBox(4), cropBox(1), cropBox(2));
     videoWidth = cropBox(4);
     videoHeight = cropBox(3);
 else
