@@ -1,7 +1,8 @@
-function arrayOut = insert(arrayIn, index, item)
+function arrayOut = insertInArray(arrayIn, index, item)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% insert: Insert an item into an array. How is this not already a function?
-% usage:  arrayOut = insert(arrayIn, index, item)
+% insertInArray: Insert an item into an array. How is this not already a 
+%   function?
+% usage:  arrayOut = insertInArray(arrayIn, index, item)
 %
 % where,
 %    arrayIn is any 1D array or cell array
@@ -11,7 +12,7 @@ function arrayOut = insert(arrayIn, index, item)
 % Insert something into an array. Example:
 %
 %   x = [1, 2, 3, 4, 5];
-%   x = insert(x, 3, 99)
+%   x = insertInArray(x, 3, 99)
 %   x =
 %          1     2    99     3     4     5%
 %
