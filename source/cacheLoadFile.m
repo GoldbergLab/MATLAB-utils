@@ -31,15 +31,40 @@ function [data, cache] = cacheLoadFile(path, loader, cache, options)
 arguments
     path
     loader
-    cache = containers.Map()
+    cache = struct("data", containers.Map(), "order", containers.Map())
     options.LoaderArgs = {}
+    options.MaxLength = []
 end
 
-if cache.isKey(path)
+if cache.data.isKey(path)
     % We've already loaded this file, get data from cache
-    data = path(path);
+    data = cache.data(path);
 else
     % New file, load it and cache it
     data = loader(path, options.LoaderArgs{:});
-    cache(path) = data;
+    cache.data(path) = data;
+    cache.order(path) = get_next_idx(cache);
+end
+
+if ~isempty(options.MaxLength)
+    clean_cache(cache, options.MaxLength);
+end
+
+function next_idx = get_next_idx(cache)
+if isempty(cache.order)
+    next_idx = 1;
+else
+    next_idx = max(cell2mat(cache.order.values())) + 1;
+end
+
+function clean_cache(cache, num_to_keep)
+% Get rid of oldest entries until there are at most num_to_keep left
+if length(cache.order) > num_to_keep
+    num_to_delete = length(cache.order) - num_to_keep;
+    keys = cache.order.keys();
+    order = cell2mat(cache.order.values());
+    [~, idx] = sort(order);
+    delete_idx = idx(1:num_to_delete);
+    remove(cache.data, keys(delete_idx));
+    remove(cache.order, keys(delete_idx));
 end
