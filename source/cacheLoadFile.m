@@ -29,11 +29,17 @@ function [data, cache] = cacheLoadFile(path, loader, cache, options)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
-    path
-    loader
+    path = ''
+    loader = @()[]
     cache = struct("data", containers.Map(), "order", containers.Map())
     options.LoaderArgs = {}
     options.MaxLength = []
+end
+
+if isempty(path)
+    % Just create an empty cache
+    data = {};
+    return;
 end
 
 if cache.data.isKey(path)
