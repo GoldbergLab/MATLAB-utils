@@ -130,11 +130,11 @@ if ~no_mmap
         videoData = reshape(typecast(mmap.Data, 'uint8'), ffmpegVideoShape);
         clear mmap;
         videoData = permute(videoData, permuteOrder);
-        if exist(tempFilePath, 'var')
+        if exist(tempFilePath, 'file')
             delete(tempFilePath);
         end
     catch ME
-        if exist(tempFilePath, 'var')
+        if exist(tempFilePath, 'file')
             delete(tempFilePath);
         end
         rethrow(ME);
