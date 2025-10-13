@@ -6,14 +6,7 @@ arguments
     cropBox double = []       % [x, y, w, h] box to crop video
 end
 % Check that ffmpeg and ffprobe exist on system path
-[ffmpegStatus, ~] = system('where /q ffmpeg');
-if ffmpegStatus ~= 0
-    error('To use fastVideoReader, ffmpeg must be installed and available on the system path. See https://ffmpeg.org/download.html.');
-end
-[ffprobeStatus, ~] = system('where /q ffprobe');
-if ffprobeStatus ~= 0
-    error('To use fastVideoReader, ffprobe must be installed and available on the system path. See https://ffmpeg.org/download.html.');
-end
+checkFFmpeg('CheckFFmpeg', true, 'CheckFFprobe', true, 'CheckFFplay', false, 'IssueError', true);
 
 % Get video size using ffprobe
 [status, cmdout] = system(sprintf('ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -show_entries stream=width,height -of csv=p=0 "%s"  ', videoPath));
