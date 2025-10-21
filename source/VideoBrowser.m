@@ -30,6 +30,8 @@ classdef VideoBrowser < handle
         ProfileTimes            uint64 = zeros(1, 10, 'uint64')
         ProfileTimestamps       uint64 = zeros(1, 10, 'uint64')
         ProfileCounts           double = zeros(1, 10)
+        Async                   logical = true
+        AsyncVideoReader        VideoReaderAsync
     end
     properties
         MainFigure              matlab.ui.Figure                    % The main figure window
@@ -108,17 +110,22 @@ classdef VideoBrowser < handle
             %   NavigationCLim = optional color limits for the navigation 
             %       axes, expressed as a two-element vector [cmin, cmax].
             %       This can also be a cell array if multiple navigation 
-            %       axes are specified in the NavigationDataOrFcn argument.            
+            %       axes are specified in the NavigationDataOrFcn argument.
+            %   Async = on optional boolean flag indicating whether or not
+            %       to load the video asynchronously in the background.
             %   title = a char array to use as the image title
             arguments
-                VideoData
+                VideoData = []
                 options.NavigationData = [];
                 options.NavigationColor = 'black';
                 options.NavigationColormap = colormap();
                 options.NavigationCLim = [13.0000, 24.5000]
                 options.NavigationScrollMode {mustBeMember(options.NavigationScrollMode, {'centered', 'partial', 'sweep', 'none'})} = 'sweep' 
                 options.Title = '';
+                options.Async logical = true;
             end
+
+            obj.Async = options.Async;
 
             NavigationDataOrFcns = options.NavigationData;
             NavigationColors = options.NavigationColor;
@@ -145,17 +152,14 @@ classdef VideoBrowser < handle
                 obj.NavigationAxes(axNum).CLim = NavigationCLims{axNum};
             end
 
-            % Set more defaults
-            if ~exist('VideoData', 'var') || isempty(VideoData)
-                VideoData = [];
-            end
-
             if iscell(VideoData)
                 % User must be passing video data and audio data together
-                obj.VideoData = VideoData{1};
+                obj.loadNewVideoData(VideoData{1});
+%                 obj.VideoData = VideoData{1};
                 obj.AudioData = VideoData{2};
             else
-                obj.VideoData = VideoData;
+                obj.loadNewVideoData(VideoData);
+%                 obj.VideoData = VideoData;
             end
 
             % Temporarily disable drawing navigation to prevent all the
@@ -519,7 +523,7 @@ classdef VideoBrowser < handle
             obj.deleteDisplayArea();
             
             % Create graphics containers
-            obj.MainFigure =        figure('Units', 'normalized');
+            obj.MainFigure =        figure('Units', 'normalized', 'BusyAction', 'cancel');
             obj.VideoPanel =        uipanel(obj.MainFigure, 'Units', 'normalized', 'Position', [0, 0, 1, 1]);
             obj.VideoAxes =         axes(obj.VideoPanel, 'Units', 'normalized', 'Visible', false);
             obj.NavigationPanel =   uipanel(obj.VideoPanel, 'Units', 'normalized');
@@ -1033,10 +1037,23 @@ classdef VideoBrowser < handle
                 % User has provided a filepath instead of the actual video
                 % data - load it.
                 obj.VideoPath = newVideoData;
-                makeGrayscale = false;
-                newVideoData = loadVideoData(obj.VideoPath, makeGrayscale);
-                videoInfo = getVideoInfo(obj.VideoPath);
-                obj.VideoFrameRate = videoInfo.frameRate;
+                if obj.Async
+                    obj.AsyncVideoReader = VideoReaderAsync(obj.VideoPath, 'StoreData', false, 'FramesReceivedCallback', @obj.updateAsyncVideoData);
+                    obj.VideoFrameRate = obj.AsyncVideoReader.FrameRate;
+                    % Initialize video data
+                    finalVideoShape = [...
+                        obj.AsyncVideoReader.Width, ...
+                        obj.AsyncVideoReader.Height, ...
+                        obj.AsyncVideoReader.NumChannels, ...
+                        obj.AsyncVideoReader.NumFrames];
+                    newVideoData = zeros(finalVideoShape, 'uint8');
+                    obj.updateNumColorChannels();
+                else
+                    makeGrayscale = false;
+                    newVideoData = loadVideoData(obj.VideoPath, makeGrayscale);
+                    videoInfo = getVideoInfo(obj.VideoPath);
+                    obj.VideoFrameRate = videoInfo.frameRate;
+                end
                 obj.PlaybackSpeed = obj.VideoFrameRate;
                 try
                     [obj.AudioData, obj.AudioSampleRate] = audioread(obj.VideoPath);
@@ -1055,15 +1072,35 @@ classdef VideoBrowser < handle
                 obj.VideoPath = '';
             end
         end
-        function set.VideoData(obj, newVideoData)
-            % Setter for the VideoData property
-
-            newVideoData = obj.prepareNewVideoData(newVideoData);
-            obj.VideoData = newVideoData;
+        function updateAsyncVideoData(obj, ~, evt)
+            obj.VideoData(:, :, :, evt.FrameStart:evt.FrameEnd) = evt.Frames;
+        end
+        function loadNewVideoData(obj, newVideoData)
+            obj.VideoData = obj.prepareNewVideoData(newVideoData);
             obj.updateNumColorChannels();
             obj.setCurrentFrameNum(1);
             obj.drawNavigationData();
         end
+%         function set.VideoData(obj, newVideoData)
+%             % Setter for the VideoData property
+% 
+%             if obj.Async %#ok<MCSUP> 
+%                 obj.VideoData = newVideoData;
+%             else
+%                 obj.VideoData = obj.prepareNewVideoData(newVideoData);
+%                 obj.updateNumColorChannels();
+%                 obj.setCurrentFrameNum(1);
+%             end
+%             obj.drawNavigationData();
+%         end
+%         function videoData = get.VideoData(obj)
+%             if obj.Async
+%                 % We loaded the video data asynchronously
+%                 videoData = obj.AsyncVideoReader.VideoData;
+%             else
+%                 videoData = obj.VideoData;
+%             end
+%         end
         function set.NavigationDataFunction(obj, newNavigationDataFunction)
             % Setter for the NavigationDataFunction property
             
@@ -1188,12 +1225,12 @@ classdef VideoBrowser < handle
         end
         function [inside, x, y] = inVideoAxes(obj, x, y)
             % Determine if the given figure coordinates fall within the
-            %   borders of the VideoAxes or not..
+            %   borders of the VideoAxes or not
             if y < obj.VideoAxes.Position(2)
                 inside = false;
             elseif y > obj.VideoAxes.Position(2) + obj.VideoAxes.Position(4)
                 inside = false;
-            elseif (x < obj.VideoAxes.Position(1))
+            elseif x < obj.VideoAxes.Position(1)
                 inside = false;
             elseif x > obj.VideoAxes.Position(1) + obj.VideoAxes.Position(3)
                 inside = false;
