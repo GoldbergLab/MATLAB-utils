@@ -15,4 +15,4 @@ function tf = istext(A)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-tf = (ischar(A) && isvector(A)) || (isstring(A) && length(A) == 1);
+tf = (ischar(A) && (isvector(A) || isempty(A))) || (isstring(A) && length(A) == 1);
