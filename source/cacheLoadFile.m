@@ -29,7 +29,7 @@ function [data, cache] = cacheLoadFile(path, loader, cache, options)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
-    path = ''
+    path {mustBeTextScalar} = ''
     loader = @()[]
     cache = struct("data", containers.Map(), "order", containers.Map())
     options.LoaderArgs = {}
