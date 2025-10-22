@@ -67,13 +67,9 @@ offset = transform(2);
 vec2 = vec2 * scale + offset;
 
 % Truncate longer vector
-if length(vec2) ~= length(vec1)
-    if length(vec2) > length(vec1)
-        vec2 = vec2(1:length(vec1)+1);
-    else
-        vec1 = vec1(1:length(vec2)+1);
-    end
-end
+minLen = min(numel(vec1), numel(vec2));
+vec1   = vec1(1:minLen);
+vec2   = vec2(1:minLen);
 
 if iscolumn(vec1)
     vec1 = vec1';
