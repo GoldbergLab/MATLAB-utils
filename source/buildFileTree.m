@@ -14,25 +14,25 @@ function tree = buildFileTree(rootDir)
 %
 % This is a function that builds a file tree representing all the files and
 %   folders within a given root directory. It is built to use with
-%   findFilesByRegex, to greatly speed up repeated searches of large file
+%   findPaths, to greatly speed up repeated searches of large file
 %   systems. For example, this code can be sped up:
 %
 %       rootDir = 'C:\path\to\root';
-%       list1 = findFilesByRegex(rootDir, regex1);
-%       list2 = findFilesByRegex(rootDir, regex2);
+%       list1 = findPaths(rootDir, regex1);
+%       list2 = findPaths(rootDir, regex2);
 %       ...
-%       listN = findFilesByRegex(rootDir, regexN);
+%       listN = findPaths(rootDir, regexN);
 %
 %   by building a tree first, like so:
 %
 %       rootDir = 'C:\path\to\root';
 %       tree = buildFileTree(rootDir);
-%       list1 = findFilesByRegex(tree, regex1);
-%       list2 = findFilesByRegex(tree, regex2);
+%       list1 = findPaths(tree, regex1);
+%       list2 = findPaths(tree, regex2);
 %       ...
-%       listN = findFilesByRegex(tree, regexN);
+%       listN = findPaths(tree, regexN);
 %
-% See also: findFilesByRegex, dir
+% See also: findPaths, dir
 %
 % Version: 1.0
 % Author:  Brian Kardon
