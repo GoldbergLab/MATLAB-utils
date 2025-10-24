@@ -35,6 +35,11 @@ function [filePaths, varargout] = findPaths(rootDirOrTree, pattern, options)
 %                   according to the last modified time of the files)
 %       CaseSensitive: should the pattern be matched case sensitive?
 %           Default is true.
+%       Filter: A function that takes a file path and returns true or 
+%           false, used to filter the results. For example, the function
+%           might check the size or contents of the file, or do more 
+%           complex tests on the file path than can be easily done with
+%           regex alone.
 %
 %   filePaths is a cell array of file paths that matched the regex
 %   token1, token2, ... is one or more cell arrays containing the tokens
@@ -88,6 +93,7 @@ arguments
     options.TimeFilterMode char {mustBeMember(options.TimeFilterMode, {'Filename', 'CreateTime', 'ModifyTime'})} = 'Filename'
     options.FilenameTimestampParser function_handle = function_handle.empty
     options.CaseSensitive logical = true
+    options.Filter function_handle = function_handle.empty()
 end
 
 if isstruct(rootDirOrTree)
@@ -181,6 +187,16 @@ for k = 1:length(files)
         else
             filepath = fullfile(rootDirOrTree, filename);
         end
+
+        % Did user supply a filter function?
+        if ~isempty(options.Filter) 
+            % Yes, check if the filepath passes the filter function
+            if ~options.Filter(filepath)
+                % Filepath does not pass the filter function - skip it
+                continue
+            end
+        end
+
         filePaths{end+1} = filepath; %#ok<AGROW> 
         if ~isempty(tokens) && numTokens > 0
             tokens = tokens{1};
