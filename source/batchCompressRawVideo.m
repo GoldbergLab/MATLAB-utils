@@ -1,7 +1,7 @@
 function record = batchCompressRawVideo(videoRoot, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % batchCompressRawVideo: <short description>
-% usage: bbatchCompressRawVideo(videoRoot, "Name", "Value", ...)
+% usage: batchCompressRawVideo(videoRoot, "Name", "Value", ...)
 %
 % where,
 %    videoRoot is the path to the folder to be searched for videos
@@ -55,7 +55,7 @@ end
 
 % Get list of videos with that extension
 options.VideoExtension = regexprep(options.VideoExtension, '[^a-zA-Z0-9]', '');
-videos = findFiles( ...
+videos = findPaths( ...
     videoRoot, ...
     ['.*\.', options.VideoExtension], ...
     "SearchSubdirectories", ...

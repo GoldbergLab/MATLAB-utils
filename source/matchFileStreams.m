@@ -13,7 +13,7 @@ if isempty(sessionIdentifierRegex)
 end
 
 % Find files within root that match the stream identifier regex
-paths = findFiles(root, streamIdentifierRegex, "CaseSensitive", false, "IncludeFolders", false, "IncludeFiles", true, "SearchSubdirectories", options.Recursive, "MatchWholePath", false);
+paths = findPaths(root, streamIdentifierRegex, "CaseSensitive", false, "IncludeFolders", false, "IncludeFiles", true, "SearchSubdirectories", options.Recursive, "MatchWholePath", false);
 % Get filenames (without paths)
 [~, filenames, ~] = fileparts(paths);
 % Group files according to stream identifier

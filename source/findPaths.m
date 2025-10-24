@@ -1,8 +1,8 @@
-function [filePaths, varargout] = findFiles(rootDirOrTree, pattern, options)
+function [filePaths, varargout] = findPaths(rootDirOrTree, pattern, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% findFiles: Search rootDir for file paths that match the regex
-% usage:                 filePaths = findFiles(rootDir, pattern)
-%   [filePaths, token1, token2...] = findFiles(rootDir, pattern, 
+% findPaths: Search rootDir for file paths that match the regex
+% usage:                 filePaths = findPaths(rootDir, pattern)
+%   [filePaths, token1, token2...] = findPaths(rootDir, pattern, 
 %                                              "Name", "Value", ...)
 %
 % where,
@@ -56,7 +56,7 @@ function [filePaths, varargout] = findFiles(rootDirOrTree, pattern, options)
 %
 %   running the command
 %
-%     [filePaths, fileNums] = findFiles(rootDir, 'test([0-9])\.txt')
+%     [filePaths, fileNums] = findPaths(rootDir, 'test([0-9])\.txt')
 %
 %   Would produce the following arrays:
 %
@@ -216,7 +216,7 @@ if options.SearchSubdirectories
             % Run function recursively to capture output from subfolder 
             %   tree
             optionArgs = namedargs2cell(options);
-            [newFilePaths, newFileTokens{:}] = findFiles(newRootDirOrTree, pattern, optionArgs{:});
+            [newFilePaths, newFileTokens{:}] = findPaths(newRootDirOrTree, pattern, optionArgs{:});
             % Append subfolder tree path outputs to current folder path 
             %   outputs
             filePaths = [filePaths, newFilePaths]; %#ok<AGROW> 

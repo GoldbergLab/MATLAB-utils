@@ -1,7 +1,7 @@
 function [filePaths, varargout] = findFilesByRegex(rootDirOrTree, regex, matchPath, recurse, includeFolders, includeFiles)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%           THIS FUNCTION IS DEPRECATED - USE findFiles INSTEAD
+%           THIS FUNCTION IS DEPRECATED - USE findPaths INSTEAD
 %
 % findFilesByRegex: Search rootDir for file paths that match the regex
 % usage:  filePaths = findFilesByRegex(rootDir, regex)
@@ -26,7 +26,7 @@ function [filePaths, varargout] = findFilesByRegex(rootDirOrTree, regex, matchPa
 %   token1, token2, ... is one or more cell arrays containing the tokens
 %       matched by capturing groups in the regex for each file path.
 %
-% This function is deprecated in favor of 'findFiles'. It may be removed in
+% This function is deprecated in favor of 'findPaths'. It may be removed in
 %   the future - please update your code accordingly.
 %
 % This is a function that returns a simple cell array of paths when given a
@@ -54,14 +54,14 @@ function [filePaths, varargout] = findFilesByRegex(rootDirOrTree, regex, matchPa
 %     fileNums = 
 %       {'1', '4', '7'}
 %
-% See also: dir, buildFileTree, findFiles
+% See also: dir, buildFileTree, findPaths
 %
 % Version: 1.0
 % Author:  Brian Kardon
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %
-%           THIS FUNCTION IS DEPRECATED - USE findFiles INSTEAD
+%           THIS FUNCTION IS DEPRECATED - USE findPaths INSTEAD
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

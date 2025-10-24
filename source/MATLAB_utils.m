@@ -58,7 +58,7 @@ function [MATLAB_utils_path, functionList] = MATLAB_utils(display)
         fprintf('\n');
         fprintf('<strong>Functions%s</strong>:\n', functionRegexDisplayText);
         
-        functionList = findFiles(MATLAB_utils_source_path, functionRegex, 'CaseSensitive', false);
+        functionList = findPaths(MATLAB_utils_source_path, functionRegex, 'CaseSensitive', false);
         displayFunctionList(functionList)
     end
 end
