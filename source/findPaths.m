@@ -40,6 +40,8 @@ function [filePaths, varargout] = findPaths(rootDirOrTree, pattern, options)
 %           might check the size or contents of the file, or do more 
 %           complex tests on the file path than can be easily done with
 %           regex alone.
+%       Extension: For convenience, a string or char array representing
+%           a file extension, or a cell array of them.
 %
 %   filePaths is a cell array of file paths that matched the regex
 %   token1, token2, ... is one or more cell arrays containing the tokens
@@ -94,6 +96,20 @@ arguments
     options.FilenameTimestampParser function_handle = function_handle.empty
     options.CaseSensitive logical = true
     options.Filter function_handle = function_handle.empty()
+    options.Extension {mustBeText} = ''
+end
+
+if ~isempty(options.Extension)
+    extfix = @(ext)['\.', replace(char(ext), '.', ''), '$'];
+    if istext(options.Extension)
+        extension_regex = extfix(options.Extension);
+    elseif iscell(options.Extension)
+        extension_regex = joinchar(cellfun(extfix, options.Extension, 'UniformOutput', false), '|');
+    else
+        error('Extension argument must be a char, string, or cell array of chars and strings')
+    end
+else
+    extension_regex = '';
 end
 
 if isstruct(rootDirOrTree)
@@ -193,6 +209,15 @@ for k = 1:length(files)
             % Yes, check if the filepath passes the filter function
             if ~options.Filter(filepath)
                 % Filepath does not pass the filter function - skip it
+                continue
+            end
+        end
+
+        % Did user supply a file extension?
+        if ~isempty(extension_regex)
+            % Yes, check if it matches
+            if isempty(regexp(filepath, extension_regex, 'once'))
+                % No match, skip it
                 continue
             end
         end
