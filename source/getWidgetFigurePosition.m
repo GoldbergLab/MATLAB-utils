@@ -25,42 +25,13 @@ arguments
     units (1, :) char {mustBeMember(units, {'pixels', 'normalized', 'inches', 'centimeters', 'points', 'characters'})} = 'pixels'
 end
 
-% Get a reference to the parent widget
-parent = widget.Parent;
-
-% Record the original unit settings so we can restore them at the end
-original_parent_units = parent.Units;
-original_widget_units = widget.Units;
-
-% Set parent figure unit setting to the desired output units
-parent.Units = units;
-
-% Set the widget units to 'normalized'
-widget.Units = 'normalized';
-
-% Get the parent widget's figure position
-switch class(parent)
-    case 'matlab.ui.Figure'
-        switch units
-            case 'normalized'
-                parent_position = [0, 0, 1, 1];
-            otherwise
-                parent_position = [0, 0, parent.Position(3), parent.Position(4)];
-        end
-    otherwise
-        parent_position = getWidgetFigurePosition(parent, units);
+fig = ancestor(widget,'figure');
+if isempty(fig)
+    error('getWidgetFigurePosition:NoFigure','Widget has no figure ancestor.');
 end
 
-% Get the widgets position relative to the parent position
-widget_position = widget.Position;
+position = getpixelposition(widget, true);
 
-% Compute the screen position of the widget
-position = [0, 0, 0, 0];
-position(1) = parent_position(1) + widget_position(1)*parent_position(3);
-position(2) = parent_position(2) + widget_position(2)*parent_position(4);
-position(3) = widget_position(3)*parent_position(3);
-position(4) = widget_position(4)*parent_position(4);
-
-% Restore the original unit settings of the widgets
-parent.Units = original_parent_units;
-widget.Units = original_widget_units;
+if ~strcmp(units, 'pixels')
+    position = hgconvertunits(fig, position, 'pixels', units, fig);
+end
