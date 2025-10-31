@@ -148,17 +148,17 @@ end
 if istext(rowUnits)
     rowUnits = repmat({rowUnits}, 1, numRows);
 end
-if length(columnWidths) == 1
+if isscalar(columnWidths)
     columnWidths = repmat(columnWidths, 1, numColumns);
 end
-if length(rowHeights) == 1
+if isscalar(rowHeights)
     rowHeights = repmat(rowHeights, 1, numRows);
 end
 
-if length(columnMargins) == 1
+if isscalar(columnMargins)
     columnMargins = repmat(columnMargins, 1, numColumns+1);
 end
-if length(rowMargins) == 1
+if isscalar(rowMargins)
     rowMargins = repmat(rowMargins, 1, numRows+1);
 end
 
