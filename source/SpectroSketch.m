@@ -29,8 +29,10 @@ classdef SpectroSketch < handle
 
         TextureBrushButton          matlab.ui.control.UIControl
         TextureBrushSettingsPanel   matlab.ui.container.Panel
-        BrushSizeSliderPanel        matlab.ui.container.Panel
-        BrushSizeSlider             matlab.ui.control.UIControl
+        BrushTFadeSliderPanel       matlab.ui.container.Panel
+        BrushTFadeSlider            matlab.ui.control.UIControl
+        BrushFFadeSliderPanel       matlab.ui.container.Panel
+        BrushFFadeSlider            matlab.ui.control.UIControl
 
         BrushModeButtonGroup        matlab.ui.container.ButtonGroup
         BrushModeAddButton          matlab.ui.control.UIControl
@@ -40,6 +42,8 @@ classdef SpectroSketch < handle
         SpectrogramSettingsPanel    matlab.ui.container.Panel
         SpectrogramCLimButton       matlab.ui.control.UIControl
 
+        MenuBar                     
+
         BrushOverlay                matlab.graphics.primitive.Rectangle
         PlayCursors                 
         BrushTextureAudioData
@@ -47,9 +51,9 @@ classdef SpectroSketch < handle
         ShiftKeyDown = false
         CtrlKeyDown = false
         IsDrawing = false
-        Brush = stackBrush(7, 41, 5, 25, 'Smoothing', 5) %gaussBrush(7)
-        BrushTMultiplier =          0.1
-        BrushFMultiplier =          100
+        BrushTIdxSize = 10  % Brush time size in index units
+        BrushFIdxSize = 10  % Brush frequency size in index units
+        Brush
         AudioPlayer             audioplayer
         SpectrogramCLim = [13.0000, 24.5000]
     end
@@ -58,6 +62,8 @@ classdef SpectroSketch < handle
         SpectrogramData
         FrequencyValues
         TimeValues
+        dF
+        dT
         Window = hamming(512)
         WindowOverlap = 256
         NFFT = 512
@@ -202,14 +208,23 @@ classdef SpectroSketch < handle
             obj.TextureBrushSettingsPanel =   uipanel(obj.BrushSettingsPanel, ...
                                                 'Title', 'Texture brush settings' ...
                                                 );
-            obj.BrushSizeSliderPanel =      uipanel(obj.BrushSettingsPanel, ...
-                                                'Title', 'Brush size' ...
+            obj.BrushTFadeSliderPanel =      uipanel(obj.BrushSettingsPanel, ...
+                                                'Title', 'Brush frequency size' ...
                                                 );
-            obj.BrushSizeSlider =           uicontrol(obj.BrushSizeSliderPanel, ...
-                                                "Min", 1, "Max", 10, ...
-                                                "Value", 5, ...
+            obj.BrushTFadeSlider =           uicontrol(obj.BrushTFadeSliderPanel, ...
+                                                "Min", 0, "Max", 100, ...
+                                                "Value", 0, ...
                                                 "Style", "slider" ...
                                                 );
+            obj.BrushFFadeSliderPanel =      uipanel(obj.BrushSettingsPanel, ...
+                                                'Title', 'Brush frequency edge fade %' ...
+                                                );
+            obj.BrushFFadeSlider =           uicontrol(obj.BrushFFadeSliderPanel, ...
+                                                "Min", 0, "Max", 100, ...
+                                                "Value", 0, ...
+                                                "Style", "slider" ...
+                                                );
+            
             obj.BrushModeButtonGroup =      uibuttongroup(obj.BrushSettingsPanel, ...
                                                 'Title', 'Brush mode' ...
                                                 );
@@ -309,8 +324,10 @@ classdef SpectroSketch < handle
                       obj.StackBrushNumSlider;
                     obj.StackBrushMagSliderPanel;
                       obj.StackBrushMagSlider;
-                obj.BrushSizeSliderPanel;
-                obj.BrushSizeSlider;
+                obj.BrushTFadeSliderPanel;
+                obj.BrushTFadeSlider;
+                obj.BrushFFadeSliderPanel;
+                obj.BrushFFadeSlider;
                 obj.BrushModeButtonGroup;
                   obj.BrushModeAddButton;
                   obj.BrushModeReplaceButton;
@@ -372,10 +389,12 @@ classdef SpectroSketch < handle
                                 obj.StackBrushSettingsPanel.Visible =   false;
                                 obj.TextureBrushSettingsPanel.Visible = true;
                         end
-                        obj.BrushSizeSliderPanel.Position = [0, brushSettingsPanelH - brushAxesH - brushTypeButtonGroupH - sliderH, brushSettingsPanelW, sliderH + labelH];
-                            obj.BrushSizeSlider.Position = [0, sliderH - labelH, brushSettingsPanelW, sliderH];
+                        obj.BrushTFadeSliderPanel.Position = [0, brushSettingsPanelH + (brushAxesH + brushTypeButtonGroupH + sliderH), brushSettingsPanelW, sliderH + labelH];
+                            obj.BrushTFadeSlider.Position = [0, sliderH - labelH, brushSettingsPanelW, sliderH];
+                        obj.BrushFFadeSliderPanel.Position = [0, brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + 2*sliderH), brushSettingsPanelW, sliderH + labelH];
+                            obj.BrushFFadeSlider.Position = [0, sliderH - labelH, brushSettingsPanelW, sliderH];
                         brushModeButtonGroupH = brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + sliderH);
-                        brushModeButtonGroupY = brushSettingsPanelH - brushAxesH - brushTypeButtonGroupH - sliderH - brushModeButtonGroupH;
+                        brushModeButtonGroupY = brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + 2*sliderH + brushModeButtonGroupH);
                         obj.BrushModeButtonGroup.Position = [0, brushModeButtonGroupY, brushSettingsPanelW, brushModeButtonGroupH];
                             obj.BrushModeAddButton.Position =      [0, brushModeButtonGroupH - radioH * 2, brushSettingsPanelW, radioH];
                             obj.BrushModeReplaceButton.Position =  [0, brushModeButtonGroupH - radioH * 3, brushSettingsPanelW, radioH];
@@ -395,6 +414,8 @@ classdef SpectroSketch < handle
                     "FFTLength", obj.NFFT, ...
                     "FrequencyRange", "onesided" ...
                     );
+            obj.dF = mean(diff(obj.FrequencyValues));
+            obj.dT = mean(diff(obj.TimeValues));
         end
         function updateAudioData(obj)
             obj.AudioData = istft( ...
@@ -443,9 +464,9 @@ classdef SpectroSketch < handle
             obj.updateAudioDisplay();
         end
         function applyBrush(obj, t, f)
-            [tidx, fidx] = obj.getBrushIdx(t, f);
-            [tSize, fSize] = obj.getBrushIdxSize(t, f);
-            brush = zeros(fSize, tSize);
+            [spectTIdx, spectFIdx, brushTIdx, brushFIdx] = obj.getBrushIdx(t, f);
+
+            brush = zeros(diff(spectFIdx)+1, diff(spectTIdx)+1);
             switch obj.BrushTypeButtonGroup.SelectedObject.String
                 case 'Solid brush'
                     brush(:) = obj.SolidBrushMagSlider.Value;
@@ -454,15 +475,24 @@ classdef SpectroSketch < handle
                     magStacks = obj.StackBrushMagSlider.Value;
                     brush(:) = stackBrush(tSize, fSize, numStacks, magStacks, 'Smoothing', round(tSize/5));
                 case 'Texture brush'
-                    brush = resizeArray(obj.BrushTextureAudioData, [fSize, tSize]);
+                    brush = obj.BrushTextureAudioData;
+                    if brushFIdx(2) > size(obj.BrushTextureAudioData, 1) || brushTIdx(2) > size(obj.BrushTextureAudioData, 2)
+                        extraF = max(0, brushFIdx(2) - size(obj.BrushTextureAudioData, 1));
+                        extraT = max(0, brushTIdx(2) - size(obj.BrushTextureAudioData, 2));
+                        brush = padarray(brush, floor([extraF/2, extraT/2]), 0, 'pre');
+                        extraF = max(0, brushFIdx(2) - size(obj.BrushTextureAudioData, 1));
+                        extraT = max(0, brushTIdx(2) - size(obj.BrushTextureAudioData, 2));
+                        brush = padarray(brush, [extraF, extraT], 0, 'post');
+                    end
+                    brush = brush(brushFIdx(1):brushFIdx(2), brushTIdx(1):brushTIdx(2));
             end
             switch obj.BrushModeButtonGroup.SelectedObject.String
                 case 'Add'
-                    obj.SpectrogramData(fidx(1):fidx(2), tidx(1):tidx(2)) = obj.SpectrogramData(fidx(1):fidx(2), tidx(1):tidx(2)) + brush;
+                    obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) + brush;
                 case 'Multiply'
-                    obj.SpectrogramData(fidx(1):fidx(2), tidx(1):tidx(2)) = obj.SpectrogramData(fidx(1):fidx(2), tidx(1):tidx(2)) .* brush;
+                    obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) .* brush;
                 case 'Replace'
-                    obj.SpectrogramData(fidx(1):fidx(2), tidx(1):tidx(2)) = brush;
+                    obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = brush;
             end
             % switch obj.BrushModeButtonGroup.
             % obj.brushMagnitude(tidx, fidx, obj.Brush, "Behavior", "add");
@@ -575,7 +605,7 @@ classdef SpectroSketch < handle
                 if ~isempty(obj.SpectrogramData)
                     if ~isempty(tidx) && ~isempty(fidx)
                         val = num2str(abs(obj.SpectrogramData(fidx, tidx)));
-                        obj.StatusBar.String = sprintf('Spectrogram(%.03f s, %d Hz) = %s', t, f, val);
+                        obj.StatusBar.String = sprintf('Spectrogram(%.03f s, %.02f kHz) = %s', t, f/1000, val);
                     end
                 end
                 obj.updateBrushOverlay(t, f);
@@ -662,23 +692,21 @@ classdef SpectroSketch < handle
         end
         function ScrollHandler(obj, ~, evt)
             [xFig, yFig] = obj.getCurrentFigurePoint();
-            
+
             [inSpectrogramAxes, inAudioAxes, ~] = obj.whereIsMouse(xFig, yFig);
             if inSpectrogramAxes
-                scrollCount = evt.VerticalScrollCount;
-                scrollSpeed = 0.5;
+                scrollSpeed = 2;
+                scrollAmount = evt.VerticalScrollCount * scrollSpeed;
                 if obj.ShiftKeyDown
                     % Adjust time size
-                    obj.BrushTMultiplier = max(obj.BrushTMultiplier + 0.01 * scrollCount, 0.001);
+                    obj.BrushTIdxSize = max(1, obj.BrushTIdxSize + scrollAmount);
                 elseif obj.CtrlKeyDown
                     % Adjust frequency size
-                    obj.BrushFMultiplier = max(obj.BrushFMultiplier + 10 * scrollCount, 0.001);
+                    obj.BrushFIdxSize = max(1, obj.BrushFIdxSize + scrollAmount);
                 else
-                    % Adjust overall size
-                    newSize = obj.BrushSizeSlider.Value + scrollCount * scrollSpeed;
-                    newSize = max(newSize, obj.BrushSizeSlider.Min);
-                    newSize = min(newSize, obj.BrushSizeSlider.Max);
-                    obj.BrushSizeSlider.Value = newSize;
+                    % Adjust both sizes
+                    obj.BrushTIdxSize = max(1, obj.BrushTIdxSize + scrollAmount);
+                    obj.BrushFIdxSize = max(1, obj.BrushFIdxSize + scrollAmount);
                 end
                 [t, f] = obj.getCurrentSpectrogramPoint();
                 obj.updateBrushOverlay(t, f);
@@ -715,9 +743,8 @@ classdef SpectroSketch < handle
             end
         end        
         function [TSize, FSize] = getBrushSize(obj)
-            brushSize = obj.BrushSizeSlider.Value;
-            TSize = brushSize * obj.BrushTMultiplier;
-            FSize = brushSize * obj.BrushFMultiplier;
+            TSize = obj.BrushTIdxSize * obj.dT;
+            FSize = obj.BrushFIdxSize * obj.dF;
         end
         function [TLim, FLim] = getBrushLim(obj, tCenter, fCenter, options)
             arguments
@@ -736,19 +763,53 @@ classdef SpectroSketch < handle
                 FLim(2) = min(FLim(2), obj.FrequencyValues(end));
             end
         end
-        function [TIdx, FIdx] = getBrushIdx(obj, tCenter, fCenter)
-            [TLim, FLim] = obj.getBrushLim(tCenter, fCenter, 'Trim', true);
-            TIdx = [0, 0];
-            FIdx = [0, 0];
-            TIdx(1) = max(find(obj.TimeValues >= TLim(1), 1, 'first'), 1);
-            TIdx(2) = min(find(obj.TimeValues >= TLim(2), 1, 'first'), size(obj.SpectrogramData, 2));
-            FIdx(1) = max(find(obj.FrequencyValues >= FLim(1), 1, 'first'), 1);
-            FIdx(2) = min(find(obj.FrequencyValues >= FLim(2), 1, 'first'), size(obj.SpectrogramData, 1));
+        function [spectTIdx, spectFIdx, brushTIdx, brushFIdx] = getBrushIdx(obj, tCenter, fCenter)
+            nT = length(obj.TimeValues);
+            nF = length(obj.FrequencyValues);
+
+            if tCenter < obj.TimeValues(1) || ...
+                    tCenter > obj.TimeValues(end) || ...
+                    fCenter < obj.FrequencyValues(1) || ...
+                    fCenter > obj.FrequencyValues(end)
+                error('Brush center out of bounds: %f, %f', tCenter, fCenter);
+            end
+
+            [~, tCenterIdx] = min(abs(tCenter - obj.TimeValues));
+            [~, fCenterIdx] = min(abs(fCenter - obj.FrequencyValues));
+
+            spectTIdx = [];
+            spectFIdx = [];
+            spectTIdx(1) = round(tCenterIdx - obj.BrushTIdxSize / 2);
+            spectTIdx(2) = spectTIdx(1) + obj.BrushTIdxSize - 1;
+            spectFIdx(1) = round(fCenterIdx - obj.BrushFIdxSize / 2);
+            spectFIdx(2) = spectFIdx(1) + obj.BrushFIdxSize - 1;
+            brushTIdx = [1, obj.BrushTIdxSize];
+            brushFIdx = [1, obj.BrushFIdxSize];
+
+            if spectTIdx(1) < 1
+                trimAmount = 1 - spectTIdx(1);
+                spectTIdx(1) = 1;
+                brushTIdx(1) = 1 + trimAmount;
+            end
+            if spectTIdx(2) > nT
+                trimAmount = spectTIdx(2) - nT;
+                spectTIdx(2) = nT;
+                brushTIdx(2) = obj.BrushTIdxSize - trimAmount;
+            end
+            if spectFIdx(1) < 1
+                trimAmount = 1 - spectFIdx(1);
+                spectFIdx(1) = 1;
+                brushFIdx(1) = 1 + trimAmount;
+            end
+            if spectFIdx(2) > nF
+                trimAmount = spectFIdx(2) - nF;
+                spectFIdx(2) = nF;
+                brushFIdx(2) = obj.BrushFIdxSize - trimAmount;
+            end            
         end
-        function [nT, nF] = getBrushIdxSize(obj, tCenter, fCenter)
-            [TIdx, FIdx] = obj.getBrushIdx(tCenter, fCenter);
-            nT = diff(TIdx) + 1;
-            nF = diff(FIdx) + 1;
+        function [nT, nF] = getBrushIdxSize(obj)
+            nT = obj.BrushTIdxSize;
+            nF = obj.BrushFIdxSize;
         end
         function updateBrushOverlay(obj, t, f)
             if isempty(obj.BrushOverlay) || ~isvalid(obj.BrushOverlay)
