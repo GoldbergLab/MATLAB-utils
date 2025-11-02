@@ -38,9 +38,19 @@ classdef SpectroSketch < handle
         BrushModeAddButton          matlab.ui.control.UIControl
         BrushModeReplaceButton      matlab.ui.control.UIControl
         BrushModeMultiplyButton     matlab.ui.control.UIControl
+        BrushModeDivideButton       matlab.ui.control.UIControl
+        BrushModeSubtractButton     matlab.ui.control.UIControl
 
-        SpectrogramSettingsPanel    matlab.ui.container.Panel
-        SpectrogramCLimButton       matlab.ui.control.UIControl
+        SpectSettingsPanel      matlab.ui.container.Panel
+        SpectCLimButton         matlab.ui.control.UIControl
+        SpectWindowPopupPanel   matlab.ui.container.Panel
+        SpectWindowPopup        matlab.ui.control.UIControl
+        SpectWindowSizePanel    matlab.ui.container.Panel
+        SpectWindowSizeEdit     matlab.ui.control.UIControl
+        SpectWindowOverlapPanel matlab.ui.container.Panel
+        SpectWindowOverlapEdit  matlab.ui.control.UIControl
+        SpectNFFTPanel          matlab.ui.container.Panel
+        SpectNFFTEdit           matlab.ui.control.UIControl
 
         MenuBar                     
 
@@ -56,6 +66,8 @@ classdef SpectroSketch < handle
         Brush
         AudioPlayer             audioplayer
         SpectrogramCLim = [13.0000, 24.5000]
+        Windows
+        WindowNames
     end
     properties
         AudioData
@@ -64,7 +76,8 @@ classdef SpectroSketch < handle
         TimeValues
         dF
         dT
-        Window = hamming(512)
+        Window = @hamming
+        WindowSize = 512
         WindowOverlap = 256
         NFFT = 512
         AudioSamplingRate
@@ -84,6 +97,7 @@ classdef SpectroSketch < handle
                 % Select only first channel
                 options.AudioData = options.AudioData(:, 1);
             end
+            [obj.WindowNames, obj.Windows] = getWindows();
             obj.AudioData = options.AudioData;
             obj.AudioSamplingRate = options.AudioSamplingRate;
             obj.initializeUI();
@@ -137,14 +151,46 @@ classdef SpectroSketch < handle
             obj.BrushSettingsPanel =                uipanel(obj.SettingsPanel, ...
                                                 'Title', 'Brush Settings' ...
                                                 );
-            obj.SpectrogramSettingsPanel =  uipanel(obj.SettingsPanel, ...
+            obj.SpectSettingsPanel =  uipanel(obj.SettingsPanel, ...
                                                 'Title', 'Spectrogram Settings' ...
                                                 );
-            obj.SpectrogramCLimButton =     uicontrol(obj.SpectrogramSettingsPanel, ...
+            obj.SpectCLimButton =     uicontrol(obj.SpectSettingsPanel, ...
                                                 "Style", "pushbutton", ...
                                                 "String", "Color scale", ...
                                                 "Callback", @(varargin)CLimGUI(obj.SpectrogramAxes) ...
                                                 );
+            obj.SpectWindowPopupPanel =   uipanel(obj.SpectSettingsPanel, ...
+                                               'Title', 'Spectrogram window type' ...
+                                               );
+            obj.SpectWindowPopup = uicontrol(obj.SpectWindowPopupPanel, ...
+                                               "Style", "popupmenu", ...
+                                               "String", obj.WindowNames, ...
+                                               "Callback", @(src, ~)obj.updateWindowParameters('Window', obj.Windows{src.Value}) ...
+                                               );
+            obj.SpectWindowSizePanel =    uipanel(obj.SpectSettingsPanel, ...
+                                               'Title', 'Spectrogram window size' ...
+                                               );
+            obj.SpectWindowSizeEdit = uicontrol(obj.SpectWindowSizePanel, ...
+                                               "Style", "edit", ...
+                                               "String", num2str(obj.WindowSize), ...
+                                               "Callback", @(src, ~)obj.updateWindowParameters('WindowSize', str2double(src.String)) ...
+                                               );
+            obj.SpectWindowOverlapPanel = uipanel(obj.SpectSettingsPanel, ...
+                                               'Title', 'Spectrogram window overlap' ...
+                                               );
+            obj.SpectWindowOverlapEdit = uicontrol(obj.SpectWindowOverlapPanel, ...
+                                               "Style", "edit", ...
+                                               "String", num2str(obj.WindowOverlap), ...
+                                               "Callback", @(src, ~)obj.updateWindowParameters('WindowOverlap', str2double(src.String)) ...
+                                               );
+            obj.SpectNFFTPanel =          uipanel(obj.SpectSettingsPanel, ...
+                                               'Title', 'Spectrogram NFFT' ...
+                                               );
+            obj.SpectNFFTEdit = uicontrol(obj.SpectNFFTPanel, ...
+                                               "Style", "edit", ...
+                                               "String", num2str(obj.NFFT), ...
+                                               "Callback", @(src, ~)obj.updateWindowParameters('NFFT', str2double(src.String)) ...
+                                               );
 
             obj.BrushAxes =                 axes(obj.BrushSettingsPanel, ...
                                                 'XLimMode', 'manual', ...
@@ -209,7 +255,7 @@ classdef SpectroSketch < handle
                                                 'Title', 'Texture brush settings' ...
                                                 );
             obj.BrushTFadeSliderPanel =      uipanel(obj.BrushSettingsPanel, ...
-                                                'Title', 'Brush frequency size' ...
+                                                'Title', 'Brush time edge fade %' ...
                                                 );
             obj.BrushTFadeSlider =           uicontrol(obj.BrushTFadeSliderPanel, ...
                                                 "Min", 0, "Max", 100, ...
@@ -239,6 +285,14 @@ classdef SpectroSketch < handle
             obj.BrushModeMultiplyButton =        uicontrol(obj.BrushModeButtonGroup, ...
                                                 "Style", "radiobutton", ...
                                                 "String", "Multiply" ...
+                                                );
+            obj.BrushModeSubtractButton =        uicontrol(obj.BrushModeButtonGroup, ...
+                                                "Style", "radiobutton", ...
+                                                "String", "Subtract" ...
+                                                );
+            obj.BrushModeDivideButton =          uicontrol(obj.BrushModeButtonGroup, ...
+                                                "Style", "radiobutton", ...
+                                                "String", "Divide" ...
                                                 );
 
             % obj.HelpButton =                uicontrol(obj.SpectrogramPanel, 'Style', 'pushbutton', 'Units', 'normalized', 'String', '?', 'HorizontalAlignment', 'center', 'Callback', @obj.showHelp);
@@ -307,8 +361,16 @@ classdef SpectroSketch < handle
                   obj.AudioAxes;
               obj.StatusBar;
               obj.SettingsPanel;
-              obj.SpectrogramSettingsPanel;
-              obj.SpectrogramCLimButton;
+              obj.SpectSettingsPanel;
+                obj.SpectCLimButton;
+                obj.SpectWindowPopupPanel
+                    obj.SpectWindowPopup
+                obj.SpectWindowSizePanel
+                    obj.SpectWindowSizeEdit
+                obj.SpectWindowOverlapPanel
+                    obj.SpectWindowOverlapEdit
+                obj.SpectNFFTPanel
+                    obj.SpectNFFTEdit                
               obj.BrushSettingsPanel;
                 obj.BrushAxes;
                 obj.BrushTypeButtonGroup;
@@ -325,13 +387,15 @@ classdef SpectroSketch < handle
                     obj.StackBrushMagSliderPanel;
                       obj.StackBrushMagSlider;
                 obj.BrushTFadeSliderPanel;
-                obj.BrushTFadeSlider;
+                    obj.BrushTFadeSlider;
                 obj.BrushFFadeSliderPanel;
-                obj.BrushFFadeSlider;
+                    obj.BrushFFadeSlider;
                 obj.BrushModeButtonGroup;
                   obj.BrushModeAddButton;
                   obj.BrushModeReplaceButton;
                   obj.BrushModeMultiplyButton
+                  obj.BrushModeSubtractButton
+                  obj.BrushModeDivideButton
               ];
             set(allWidgets, 'Units', 'pixels');
 
@@ -389,19 +453,30 @@ classdef SpectroSketch < handle
                                 obj.StackBrushSettingsPanel.Visible =   false;
                                 obj.TextureBrushSettingsPanel.Visible = true;
                         end
-                        obj.BrushTFadeSliderPanel.Position = [0, brushSettingsPanelH + (brushAxesH + brushTypeButtonGroupH + sliderH), brushSettingsPanelW, sliderH + labelH];
+                        obj.BrushTFadeSliderPanel.Position = [0, brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + sliderH + labelH), brushSettingsPanelW, sliderH + labelH];
                             obj.BrushTFadeSlider.Position = [0, sliderH - labelH, brushSettingsPanelW, sliderH];
-                        obj.BrushFFadeSliderPanel.Position = [0, brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + 2*sliderH), brushSettingsPanelW, sliderH + labelH];
+                        obj.BrushFFadeSliderPanel.Position = [0, brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + 2*(sliderH + labelH)), brushSettingsPanelW, sliderH + labelH];
                             obj.BrushFFadeSlider.Position = [0, sliderH - labelH, brushSettingsPanelW, sliderH];
                         brushModeButtonGroupH = brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + sliderH);
-                        brushModeButtonGroupY = brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + 2*sliderH + brushModeButtonGroupH);
+                        brushModeButtonGroupY = brushSettingsPanelH - (brushAxesH + brushTypeButtonGroupH + brushModeButtonGroupH + 2*(sliderH + labelH));
                         obj.BrushModeButtonGroup.Position = [0, brushModeButtonGroupY, brushSettingsPanelW, brushModeButtonGroupH];
                             obj.BrushModeAddButton.Position =      [0, brushModeButtonGroupH - radioH * 2, brushSettingsPanelW, radioH];
                             obj.BrushModeReplaceButton.Position =  [0, brushModeButtonGroupH - radioH * 3, brushSettingsPanelW, radioH];
                             obj.BrushModeMultiplyButton.Position = [0, brushModeButtonGroupH - radioH * 4, brushSettingsPanelW, radioH];
+                            obj.BrushModeSubtractButton.Position = [0, brushModeButtonGroupH - radioH * 5, brushSettingsPanelW, radioH];
+                            obj.BrushModeDivideButton.Position =   [0, brushModeButtonGroupH - radioH * 6, brushSettingsPanelW, radioH];
                     spectrogramSettingsPanelW = settingsPanelW; spectrogramSettingsPanelH = settingsPanelH * (1 - brushPanelFrac);
-                    obj.SpectrogramSettingsPanel.Position = [0, brushSettingsPanelH, spectrogramSettingsPanelW, spectrogramSettingsPanelH];
-                        obj.SpectrogramCLimButton.Position = [0, 0, 100, buttonH];
+                    obj.SpectSettingsPanel.Position = [0, brushSettingsPanelH, spectrogramSettingsPanelW, spectrogramSettingsPanelH];
+                        obj.SpectCLimButton.Position =       [0, spectrogramSettingsPanelH - (labelH + buttonH), 100, buttonH];
+                        obj.SpectWindowPopupPanel.Position = [0, spectrogramSettingsPanelH - 2*(labelH + buttonH), spectrogramSettingsPanelW/2, labelH + labelH];
+                            obj.SpectWindowPopup.Position = [0, 0, spectrogramSettingsPanelW/2, labelH];
+                        obj.SpectWindowSizePanel.Position = [spectrogramSettingsPanelW/2, spectrogramSettingsPanelH - 2*(labelH + buttonH), spectrogramSettingsPanelW/2, labelH + labelH];
+                            obj.SpectWindowSizeEdit.Position = [0, 0, spectrogramSettingsPanelW/2, labelH];
+                        obj.SpectWindowOverlapPanel.Position = [0, spectrogramSettingsPanelH - 2*(labelH + buttonH) - 2*labelH, spectrogramSettingsPanelW/2, labelH + labelH];
+                            obj.SpectWindowOverlapEdit.Position = [0, 0, spectrogramSettingsPanelW/2, labelH];
+                        obj.SpectNFFTPanel.Position = [spectrogramSettingsPanelW/2, spectrogramSettingsPanelH - 2*(labelH + buttonH) - 2*labelH, spectrogramSettingsPanelW/2, labelH + labelH];
+                            obj.SpectNFFTEdit.Position = [0, 0, spectrogramSettingsPanelW/2, labelH];
+        
         end
 
         function updateSpectrogramData(obj)
@@ -409,7 +484,7 @@ classdef SpectroSketch < handle
                 stft( ...
                     obj.AudioData, ...
                     obj.AudioSamplingRate, ...
-                    'Window', obj.Window, ...
+                    'Window', obj.Window(obj.WindowSize), ...
                     "OverlapLength", obj.WindowOverlap, ...
                     "FFTLength", obj.NFFT, ...
                     "FrequencyRange", "onesided" ...
@@ -421,7 +496,7 @@ classdef SpectroSketch < handle
             obj.AudioData = istft( ...
                 obj.SpectrogramData, ...
                 obj.AudioSamplingRate, ...
-                "Window", obj.Window, ...
+                "Window", obj.Window(obj.WindowSize), ...
                 "OverlapLength", obj.WindowOverlap, ...
                 "FFTLength", obj.NFFT, ...
                 "FrequencyRange", "onesided" ...
@@ -452,7 +527,8 @@ classdef SpectroSketch < handle
 
         end
         function updateAudioDisplay(obj)
-            plot(obj.AudioAxes, (1:length(obj.AudioData)) / obj.AudioSamplingRate, obj.AudioData);
+            plot(obj.AudioAxes, (1:length(obj.AudioData)) / obj.AudioSamplingRate, real(obj.AudioData));
+            obj.AudioAxes.XLim = [1, length(obj.AudioData)] / obj.AudioSamplingRate;
         end
         function clearSpectrogram(obj)
             arguments
@@ -486,6 +562,14 @@ classdef SpectroSketch < handle
                     end
                     brush = brush(brushFIdx(1):brushFIdx(2), brushTIdx(1):brushTIdx(2));
             end
+            if obj.BrushTFadeSlider.Value > 0 || obj.BrushFFadeSlider.Value > 0
+                tFadeLength = round(size(brush, 2) * obj.BrushTFadeSlider.Value / 100);
+                fFadeLength = round(size(brush, 1) * obj.BrushFFadeSlider.Value / 100);
+                [F, T] = ndgridrange(size(brush));
+                middle = round(size(brush)/2);
+                fade = zeros(size(brush));
+                edge = (abs(T - middle(2)) > tFadeLength) || (abs(F - middle(1)) > fFadeLength);
+            end
             switch obj.BrushModeButtonGroup.SelectedObject.String
                 case 'Add'
                     obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) + brush;
@@ -493,6 +577,11 @@ classdef SpectroSketch < handle
                     obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) .* brush;
                 case 'Replace'
                     obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = brush;
+                case 'Subtract'
+                    obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) - brush;
+                case 'Divide'
+                    brush(brush == 0) = eps;
+                    obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) ./ brush;
             end
             % switch obj.BrushModeButtonGroup.
             % obj.brushMagnitude(tidx, fidx, obj.Brush, "Behavior", "add");
@@ -741,7 +830,9 @@ classdef SpectroSketch < handle
             %         obj.drawNavigationData(false);
             %     end
             end
-        end        
+        end
+        function obj = DividerMouseDown(obj, varargin)
+        end
         function [TSize, FSize] = getBrushSize(obj)
             TSize = obj.BrushTIdxSize * obj.dT;
             FSize = obj.BrushFIdxSize * obj.dF;
@@ -857,7 +948,49 @@ classdef SpectroSketch < handle
             end
         end
 
+        function updateWindowParameters(obj, options)
+            arguments
+                obj SpectroSketch
+                options.WindowSize = obj.WindowSize
+                options.Window = obj.Window
+                options.WindowOverlap = obj.WindowOverlap
+                options.NFFT = obj.NFFT
+            end
+            obj.Window = options.Window;
+            if ~isint(options.WindowSize) 
+                errordlg('Window size must be an integer');
+            elseif options.WindowSize < 1
+                errordlg('Window size must be at least 1');
+                obj.WindowSize = options.WindowSize;
+            else
+                obj.WindowSize = options.WindowSize;
+            end
+            if ~isint(options.WindowOverlap) 
+                errordlg('Window overlap must be an integer');
+            elseif options.WindowOverlap >= obj.WindowSize
+                errordlg('Window overlap must be less than the window size');
+            else
+                obj.WindowOverlap = options.WindowOverlap;
+            end
+            if ~isint(options.NFFT) 
+                errordlg('NFFT must be an integer')
+            elseif options.NFFT < obj.WindowSize
+                errordlg('NFFT must be at least as big as window size')
+            else
+                obj.NFFT = options.NFFT;
+            end
+            obj.updateSpectrogramData();
+            obj.updateSpectrogramDisplay();
+        end
+
+
     end
+end
+
+function result = isint(x)
+
+result = (mod(x, 1) == 0);
+
 end
 
 function C = addMatrixCentered(A, B, row, col, operation)
@@ -987,4 +1120,9 @@ Atrim = A(start1:end1, start2:end2);
 B = padarray(Atrim, [floor(pad1/2), floor(pad2/2)], 0, 'pre');
 B = padarray(B, [ceil(pad1/2), ceil(pad2/2)], 0, 'post');
 
+end
+
+function [windowNames, windows] = getWindows()
+    windowNames = {'barthannwin', 'bartlett', 'blackman', 'blackmanharris', 'bohmanwin', 'chebwin', 'flattopwin', 'gausswin', 'hamming', 'hann', 'kaiser', 'nuttallwin', 'parzenwin', 'rectwin', 'tukeywin', 'triang'};
+    windows = {@barthannwin, @bartlett, @blackman, @blackmanharris, @bohmanwin, @chebwin, @flattopwin, @gausswin, @hamming, @hann, @kaiser, @nuttallwin, @parzenwin, @rectwin, @tukeywin, @triang};
 end
