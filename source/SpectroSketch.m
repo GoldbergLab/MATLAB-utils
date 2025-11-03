@@ -52,7 +52,30 @@ classdef SpectroSketch < handle
         SpectNFFTPanel          matlab.ui.container.Panel
         SpectNFFTEdit           matlab.ui.control.UIControl
 
-        MenuBar                     
+        FileMenu                matlab.ui.container.Menu
+        FileSave                matlab.ui.container.Menu
+        FileSaveSpect           matlab.ui.container.Menu
+        FileSaveAudio           matlab.ui.container.Menu
+        FileSaveAll             matlab.ui.container.Menu
+        FileOpen                matlab.ui.container.Menu
+        FileExit                matlab.ui.container.Menu
+        PlayMenu                matlab.ui.container.Menu
+        PlayStart               matlab.ui.container.Menu
+        PlayStop                matlab.ui.container.Menu
+        PlayRecord              matlab.ui.container.Menu
+        GridMenu                matlab.ui.container.Menu
+        GridVisible             matlab.ui.container.Menu
+        GridSnap                matlab.ui.container.Menu
+        GridTypeMenu            matlab.ui.container.Menu
+        GridTypeMenuOctave      matlab.ui.container.Menu
+        GridTypeMenuMajor       matlab.ui.container.Menu
+        GridTypeMenuMinor       matlab.ui.container.Menu
+        GridTypeMenuSemitones   matlab.ui.container.Menu
+        GridMenuBaseFrequency   matlab.ui.container.Menu
+        GridMenuTimeInterval    matlab.ui.container.Menu
+        HelpMenu                matlab.ui.container.Menu
+        HelpControls            matlab.ui.container.Menu
+        HelpAbout               matlab.ui.container.Menu
 
         BrushOverlay                matlab.graphics.primitive.Rectangle
         PlayCursors                 
@@ -68,6 +91,12 @@ classdef SpectroSketch < handle
         SpectrogramCLim = [13.0000, 24.5000]
         Windows
         WindowNames
+        GridTimeOverlay = gobjects(0)
+        GridFreqOverlay = gobjects(0)
+        GridBaseFrequency double = 440
+        GridTimeInterval double = 0.25
+        GridTimes
+        GridFrequencies
     end
     properties
         AudioData
@@ -119,6 +148,100 @@ classdef SpectroSketch < handle
                                                 'BusyAction', 'cancel' ...
                                                 );
             obj.MainFigure.Position = [80, 80, 1200, 800];
+            obj.FileMenu =          uimenu("Parent", obj.MainFigure, ...
+                                            "Text", "File");
+            obj.FileSave =          uimenu("Parent", obj.FileMenu, ...
+                                            "Callback", @(varargin)[], ...
+                                            "Text", "Save" ...
+                                            );
+            obj.FileSaveSpect =     uimenu("Parent", obj.FileSave, ...
+                                            "Callback", @(varargin)obj.saveSpectrogram(), ...
+                                            "Text", "Save spectrogram as .png" ...
+                                            );
+            obj.FileSaveAudio =     uimenu("Parent", obj.FileSave, ...
+                                            "Callback", @(varargin)obj.saveAudio(), ...
+                                            "Text", "Save audio as .wav" ...
+                                            );
+            obj.FileSaveAll =       uimenu("Parent", obj.FileSave, ...
+                                            "Callback", @(varargin)obj.saveAll(), ...
+                                            "Text", "Save all as .mat" ...
+                                            );
+            obj.FileOpen =          uimenu("Parent", obj.FileMenu, ...
+                                            "Callback", @(varargin)obj.loadWav(), ...
+                                            "Text", "Open" ...
+                                            );
+            obj.FileExit =          uimenu("Parent", obj.FileMenu, ...
+                                            "Callback", @(varargin)obj.exit(), ...
+                                            "Text", "Exit" ...
+                                            );
+            obj.PlayMenu =          uimenu("Parent", obj.MainFigure, ...
+                                            "Callback", @(varargin)[], ...
+                                            "Text", "Play" ...
+                                            );
+            obj.PlayStart =         uimenu("Parent", obj.PlayMenu, ...
+                                            "Callback", @(varargin)obj.playAudio(), ...
+                                            "Text", "Play audio" ...
+                                            );
+            obj.PlayStop =          uimenu("Parent", obj.PlayMenu, ...
+                                            "Callback", @(varargin)obj.stopAudio(), ...
+                                            "Text", "Stop audio" ...
+                                            );
+            obj.PlayRecord =        uimenu("Parent", obj.PlayMenu, ...
+                                            "Callback", @(varargin)obj.recordAudio(), ...
+                                            "Text", "Record audio" ...
+                                            );
+            obj.GridMenu =          uimenu("Parent", obj.MainFigure, ...
+                                            "Callback", @(varargin)[], ...
+                                            "Text", "Grid" ...
+                                            );
+            obj.GridVisible =       uimenu("Parent", obj.GridMenu, ...
+                                            "Callback", @obj.gridVisibleChangeHandler, ...
+                                            "Text", "Show grid", ...
+                                            "Checked", "off" ...
+                                            );
+            obj.GridSnap =          uimenu("Parent", obj.GridMenu, ...
+                                            "Callback", @obj.gridSnapChangeHandler, ...
+                                            "Text", "Snap to grid", ...
+                                            "Checked", "off" ...
+                                            );
+            obj.GridTypeMenu =          uimenu("Parent", obj.GridMenu, ...
+                                            "Callback", @(varargin)[], ...
+                                            "Text", "Grid type" ...
+                                            );
+            obj.GridTypeMenuOctave =    uimenu("Parent", obj.GridTypeMenu, ...
+                                            "Callback", @obj.gridTypeChangeHandler, ...
+                                            "Text", "Octaves", ...
+                                            "Checked", "on" ...
+                                            );
+            obj.GridTypeMenuMajor  =    uimenu("Parent", obj.GridTypeMenu, ...
+                                            "Callback", @obj.gridTypeChangeHandler, ...
+                                            "Text", "Major scale", ...
+                                            "Checked", "off" ...
+                                            );
+            obj.GridTypeMenuMinor  =    uimenu("Parent", obj.GridTypeMenu, ...
+                                            "Callback", @obj.gridTypeChangeHandler, ...
+                                            "Text", "Minor scale", ...
+                                            "Checked", "off" ...
+                                            );
+            obj.GridTypeMenuSemitones = uimenu("Parent", obj.GridTypeMenu, ...
+                                            "Callback", @obj.gridTypeChangeHandler, ...
+                                            "Text", "Semitones", ...
+                                            "Checked", "off" ...
+                                            );
+            obj.GridMenuBaseFrequency = uimenu("Parent", obj.GridMenu, ...
+                                            "Callback", @(varargin)obj.getNewGridBaseFrequency(), ...
+                                            "Text", "Base frequency" ...
+                                            );
+
+            obj.GridMenuTimeInterval = uimenu("Parent", obj.GridMenu, ...
+                                "Callback", @(varargin)obj.getNewGridTimeInterval(), ...
+                                "Text", "Time interval" ...
+                                );
+
+            obj.HelpMenu =      uimenu("Parent", obj.MainFigure, "Text", "Help");
+            obj.HelpControls =  uimenu("Parent", obj.HelpMenu, "Text", "Controls");
+            obj.HelpAbout    =  uimenu("Parent", obj.HelpMenu, "Text", "About");
+            
             obj.DataPanel =                 uipanel(obj.MainFigure ...
                                                 );
             obj.SpectrogramPanel =          uipanel(obj.DataPanel ...
@@ -542,14 +665,17 @@ classdef SpectroSketch < handle
         function applyBrush(obj, t, f)
             [spectTIdx, spectFIdx, brushTIdx, brushFIdx] = obj.getBrushIdx(t, f);
 
-            brush = zeros(diff(spectFIdx)+1, diff(spectTIdx)+1);
+            tSize = diff(spectTIdx)+1;
+            fSize = diff(spectFIdx)+1;
+
+            brush = zeros(fSize, tSize);
             switch obj.BrushTypeButtonGroup.SelectedObject.String
                 case 'Solid brush'
                     brush(:) = obj.SolidBrushMagSlider.Value;
                 case 'Stack brush'
                     numStacks = round(obj.StackBrushNumSlider.Value);
                     magStacks = obj.StackBrushMagSlider.Value;
-                    brush(:) = stackBrush(tSize, fSize, numStacks, magStacks, 'Smoothing', round(tSize/5));
+                    brush(:) = stackBrush(tSize, fSize, numStacks, magStacks, 'Smoothing', round(tSize/20));
                 case 'Texture brush'
                     brush = obj.BrushTextureAudioData;
                     if brushFIdx(2) > size(obj.BrushTextureAudioData, 1) || brushTIdx(2) > size(obj.BrushTextureAudioData, 2)
@@ -583,6 +709,8 @@ classdef SpectroSketch < handle
                     brush(brush == 0) = eps;
                     obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) = obj.SpectrogramData(spectFIdx(1):spectFIdx(2), spectTIdx(1):spectTIdx(2)) ./ brush;
             end
+            % Zero frequency component should have no imaginary part
+            obj.SpectrogramData(1, :) = abs(obj.SpectrogramData(1, :));
             % switch obj.BrushModeButtonGroup.
             % obj.brushMagnitude(tidx, fidx, obj.Brush, "Behavior", "add");
         end
@@ -629,6 +757,9 @@ classdef SpectroSketch < handle
         function [t, f] = getCurrentSpectrogramPoint(obj)
             t = obj.SpectrogramAxes.CurrentPoint(1, 1);
             f = obj.SpectrogramAxes.CurrentPoint(1, 2);
+            if obj.GridSnap.Checked
+                [t, f] = obj.snapToGrid(t, f);
+            end
         end
         function [tidx, fidx, t, f] = getCurrentSpectrogramIndices(obj, options)
             arguments
@@ -749,10 +880,9 @@ classdef SpectroSketch < handle
                 case 'escape'
                 case 'space'
                     if obj.isPlaying()
-                        stop(obj.AudioPlayer);
-                        delete(obj.PlayCursors);
+                        obj.stopAudio()
                     else
-                        obj.AudioPlayer.play();
+                        obj.playAudio();
                     end
                 case 'shift'
                     obj.ShiftKeyDown = true;
@@ -982,8 +1112,142 @@ classdef SpectroSketch < handle
             obj.updateSpectrogramData();
             obj.updateSpectrogramDisplay();
         end
+    end
+    methods
+        function saveSpectrogram(obj)
+            [fileName, fileDir] = uiputfile("*.*", "Select file to save spectrogram image to...", "spectrogram.png");
+            if ~fileName
+                return
+            end
+            filePath = fullfile(fileDir, fileName);
+            imwrite(obj.SpectrogramImage.CData, obj.SpectrogramAxes.Colormap, filePath);
+        end
+        function saveAudio(obj)
+            [fileName, fileDir] = uiputfile("*.*", "Select file to save audio to...", "audio.wav");
+            if ~fileName
+                return
+            end
+            filePath = fullfile(fileDir, fileName);
+            audiowrite(filePath, obj.AudioData, obj.AudioSamplingRate, "Comment", "Generated by SpectroSketch");
+        end
+        function saveAll(obj)
+        end
+        function loadWav(obj)
+        end
+        function exit(obj)
+        end
+        function playAudio(obj)
+            obj.AudioPlayer.play();
+        end
+        function stopAudio(obj)
+            stop(obj.AudioPlayer);
+            delete(obj.PlayCursors);
+        end
+        function recordAudio(obj)
+        end
+        function getNewGridBaseFrequency(obj)
+            answer = inputdlg({"New grid base frequency in Hz"}, "Enter grid base frequency", [1, 20], {'440'});
+            inputdlg()
+            if isempty(answer)
+                return
+            end
+            obj.GridBaseFrequency = str2double(answer);
+            obj.updateGrid();
+        end
+        function getNewGridTimeInterval(obj)
+            answer = inputdlg({"New grid time interval in seconds"}, "Enter grid time interval", [1, 20], {'0.25'});
+            if isempty(answer)
+                return
+            end
+            obj.GridTimeInterval = str2double(answer);
+            obj.updateGrid();
+        end
+        function gridTypeChangeHandler(obj, src, ~)
+            for gridTypeWidget = obj.GridTypeMenu.Children'
+                if gridTypeWidget == src
+                    gridTypeWidget.Checked = "on";
+                else
+                    gridTypeWidget.Checked = "off";
+                end
+            end
+            obj.updateGrid();
+        end
+        function gridVisibleChangeHandler(obj, ~, ~)
+            obj.GridVisible.Checked = ~obj.GridVisible.Checked;
+            obj.updateGrid();
+        end
+        function gridSnapChangeHandler(obj, ~, ~)
+            obj.GridSnap.Checked = ~obj.GridSnap.Checked;
+        end
+        
+        function gridType = getGridType(obj)
+            for gridTypeWidget = obj.GridTypeMenu.Children'
+                if gridTypeWidget.Checked
+                    gridType = gridTypeWidget.Text;
+                    break;
+                end
+            end
+        end
+        function [t, f] = snapToGrid(obj, t, f)
+            [~, fidx] = min(abs(obj.GridFrequencies - f));
+            f = obj.GridFrequencies(fidx);
+        end
+        function UpdateGridFrequencies(obj)
+            switch obj.getGridType()
+                % Frequency lines
+                case 'Octaves'
+                    startOctave = round(log(obj.FrequencyValues(2)/obj.GridBaseFrequency)/log(2));
+                    endOctave = round(log(obj.FrequencyValues(end)/obj.GridBaseFrequency)/log(2));
+                    frequencies = zeros(1, endOctave - startOctave + 1);
+                    k = 1;
+                    for oct = startOctave:endOctave
+                        frequencies(k) = obj.GridBaseFrequency * 2^oct;
+                        k = k + 1;
+                    end
+                case 'Major scale'
+                    startOctave = round(log(obj.FrequencyValues(2)/obj.GridBaseFrequency)/log(2));
+                    endOctave = round(log(obj.FrequencyValues(end)/obj.GridBaseFrequency)/log(2));
+                    frequencies = zeros(1, 7*(endOctave - startOctave + 1));
+                    k = 1;
+                    for oct = startOctave:endOctave
+                        frequencies(k:k+6) = obj.GridBaseFrequency * 2 .^ (oct + ([0, 2, 4, 5, 7, 9, 11]/12));
+                        k = k + 7;
+                    end
+                case 'Minor scale'
+                case 'Semitones'
+            end
+            obj.GridFrequencies = frequencies;
+        end
+        function UpdateGridTimes(obj)
+            obj.GridTimes = obj.TimeValues(1):obj.GridTimeInterval:obj.TimeValues(end);
+        end
+        function updateGrid(obj)
+            % Delete old grid
+            delete(obj.GridTimeOverlay);
+            obj.GridTimeOverlay = gobjects(0);
+            delete(obj.GridFreqOverlay);
+            obj.GridFreqOverlay = gobjects(0);
 
+            % If grid is not visible, exit
+            if ~obj.GridVisible.Checked
+                return;
+            end
 
+            obj.UpdateGridFrequencies();
+            tlim = [obj.TimeValues(1), obj.TimeValues(end)];
+            k = 1;
+            for f = obj.GridFrequencies
+                obj.GridFreqOverlay(k) = line(obj.SpectrogramAxes, tlim, [f, f], 'Color', [0.2, 0.2, 0.2]);
+                k = k + 1;
+            end
+            % Time lines
+            obj.UpdateGridTimes();
+            flim = [obj.FrequencyValues(1), obj.FrequencyValues(end)];
+            k = 1;
+            for t = obj.GridTimes
+                obj.GridTimeOverlay(k) = line(obj.SpectrogramAxes, [t, t], flim, 'Color', [0.2, 0.2, 0.2]);
+            end
+        end
     end
 end
 
