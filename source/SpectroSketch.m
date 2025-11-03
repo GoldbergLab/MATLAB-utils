@@ -9,7 +9,7 @@ classdef SpectroSketch < handle
         AudioAxes                   matlab.graphics.axis.Axes
         StatusBar                   matlab.ui.control.UIControl         % Bottom status bar widget
         Divider                     matlab.ui.control.UIControl         % A button to allow user to drag navigation axes larger or smaller
-        SpectrogramImage            matlab.graphics.primitive.Image
+        SpectrogramImage            matlab.graphics.primitive.Image  % matlab.graphics.chart.primitive.Surface
         SettingsPanel               matlab.ui.container.Panel
         BrushSettingsPanel          matlab.ui.container.Panel
 
@@ -88,6 +88,7 @@ classdef SpectroSketch < handle
         BrushFIdxSize = 10  % Brush frequency size in index units
         Brush
         AudioPlayer             audioplayer
+        AudioRecorder          audiorecorder
         SpectrogramCLim = [13.0000, 24.5000]
         Windows
         WindowNames
@@ -136,6 +137,9 @@ classdef SpectroSketch < handle
             obj.AudioPlayer = audioplayer(obj.AudioData, obj.AudioSamplingRate);
             obj.AudioPlayer.TimerFcn = @obj.updatePlayCursors;
             obj.AudioPlayer.TimerPeriod = 1000 / obj.AudioSamplingRate;
+            obj.AudioRecorder = audiorecorder(obj.AudioSamplingRate, 16, 1);
+            obj.AudioRecorder.TimerFcn = @obj.getRecordedAudioData;
+            obj.AudioRecorder.TimerPeriod = 5000 / obj.AudioSamplingRate;
         end
         function initializeUI(obj)
             % Create & prepare the graphics containers (the figure & axes)
@@ -631,6 +635,8 @@ classdef SpectroSketch < handle
             power = 2*log(abs(obj.SpectrogramData)+eps)+20;
             if isvalid(obj.SpectrogramImage)
                 obj.SpectrogramImage.CData = power;
+                obj.SpectrogramImage.XData = obj.TimeValues;
+                obj.SpectrogramImage.YData = obj.FrequencyValues;
             else
                 obj.SpectrogramImage = imagesc( ...
                     'XData', obj.TimeValues, ...
@@ -639,15 +645,15 @@ classdef SpectroSketch < handle
                     'Parent', obj.SpectrogramAxes ...
                     );
             end
-
-            obj.SpectrogramAxes.YDir = 'normal';
-            obj.SpectrogramAxes.XLim = [obj.TimeValues(1), obj.TimeValues(end)];
-            obj.SpectrogramAxes.YLim = [obj.FrequencyValues(1), obj.FrequencyValues(end)];
             c = colormap();
             c(1, :) = [0, 0, 0];
             colormap(obj.SpectrogramAxes, c);
+            obj.SpectrogramAxes.View = [0, 90];
+            obj.SpectrogramAxes.YScale = "linear";
             obj.SpectrogramAxes.CLim = obj.SpectrogramCLim;
-
+            obj.SpectrogramAxes.YDir = 'normal';
+            obj.SpectrogramAxes.XLim = [obj.TimeValues(1), obj.TimeValues(end)];
+            obj.SpectrogramAxes.YLim = [obj.FrequencyValues(1), obj.FrequencyValues(end)/2];
         end
         function updateAudioDisplay(obj)
             plot(obj.AudioAxes, (1:length(obj.AudioData)) / obj.AudioSamplingRate, real(obj.AudioData));
@@ -675,7 +681,7 @@ classdef SpectroSketch < handle
                 case 'Stack brush'
                     numStacks = round(obj.StackBrushNumSlider.Value);
                     magStacks = obj.StackBrushMagSlider.Value;
-                    brush(:) = stackBrush(tSize, fSize, numStacks, magStacks, 'Smoothing', round(tSize/20));
+                    brush(:) = stackBrush(tSize, fSize, numStacks, magStacks, 'Smoothing', round(fSize/40));
                 case 'Texture brush'
                     brush = obj.BrushTextureAudioData;
                     if brushFIdx(2) > size(obj.BrushTextureAudioData, 1) || brushTIdx(2) > size(obj.BrushTextureAudioData, 2)
@@ -1068,6 +1074,13 @@ classdef SpectroSketch < handle
                 delete(obj.PlayCursors);
             end
         end
+        function getRecordedAudioData(obj, ~, ~)
+            obj.AudioData = obj.AudioRecorder.getaudiodata();
+            obj.AudioSamplingRate = obj.AudioRecorder.SampleRate;
+            obj.updateAudioDisplay();
+            obj.updateSpectrogramData();
+            obj.updateSpectrogramDisplay();
+        end
 
         function playing = isPlaying(obj)
             % Check if audio is currently playing
@@ -1137,6 +1150,7 @@ classdef SpectroSketch < handle
         function exit(obj)
         end
         function playAudio(obj)
+            obj.AudioPlayer.TimerFcn = @obj.updatePlayCursors;
             obj.AudioPlayer.play();
         end
         function stopAudio(obj)
@@ -1144,10 +1158,15 @@ classdef SpectroSketch < handle
             delete(obj.PlayCursors);
         end
         function recordAudio(obj)
+            answer = inputdlg({"Enter audio record length in seconds"}, "Audio record length", [1, 20], {'5'});
+            if isempty(answer)
+                return
+            end
+            recordTime = str2double(answer);
+            obj.AudioRecorder.record(recordTime);
         end
         function getNewGridBaseFrequency(obj)
             answer = inputdlg({"New grid base frequency in Hz"}, "Enter grid base frequency", [1, 20], {'440'});
-            inputdlg()
             if isempty(answer)
                 return
             end
