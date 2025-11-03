@@ -134,12 +134,6 @@ classdef SpectroSketch < handle
             obj.updateSpectrogramData();
             obj.updateSpectrogramDisplay();
             obj.updateAudioDisplay();
-            obj.AudioPlayer = audioplayer(obj.AudioData, obj.AudioSamplingRate);
-            obj.AudioPlayer.TimerFcn = @obj.updatePlayCursors;
-            obj.AudioPlayer.TimerPeriod = 1000 / obj.AudioSamplingRate;
-            obj.AudioRecorder = audiorecorder(obj.AudioSamplingRate, 16, 1);
-            obj.AudioRecorder.TimerFcn = @obj.getRecordedAudioData;
-            obj.AudioRecorder.TimerPeriod = 5000 / obj.AudioSamplingRate;
         end
         function initializeUI(obj)
             % Create & prepare the graphics containers (the figure & axes)
@@ -1150,7 +1144,10 @@ classdef SpectroSketch < handle
         function exit(obj)
         end
         function playAudio(obj)
+            delete(obj.AudioPlayer);
+            obj.AudioPlayer = audioplayer(obj.AudioData, obj.AudioSamplingRate);
             obj.AudioPlayer.TimerFcn = @obj.updatePlayCursors;
+            obj.AudioPlayer.TimerPeriod = 1000 / obj.AudioSamplingRate;
             obj.AudioPlayer.play();
         end
         function stopAudio(obj)
@@ -1163,6 +1160,10 @@ classdef SpectroSketch < handle
                 return
             end
             recordTime = str2double(answer);
+            delete(obj.AudioRecorder);
+            obj.AudioRecorder = audiorecorder(obj.AudioSamplingRate, 16, 1);
+            obj.AudioRecorder.TimerFcn = @obj.getRecordedAudioData;
+            obj.AudioRecorder.TimerPeriod = 5000 / obj.AudioSamplingRate;
             obj.AudioRecorder.record(recordTime);
         end
         function getNewGridBaseFrequency(obj)
