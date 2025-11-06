@@ -15,7 +15,7 @@ classdef ffaudioplayer < handle & matlab.mixin.SetGet
         TotalSamples
         BitsPerSample
         Running = matlab.lang.OnOffSwitchState('off')
-        Type = 'audioplayer'
+        Type = 'ffaudioplayer'
     end
     properties (Access = private)
         AudioData double

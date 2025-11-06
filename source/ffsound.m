@@ -7,3 +7,4 @@ end
 
 player = ffaudioplayer(y, Fs, nBits);
 player.play();
+delete(player);
