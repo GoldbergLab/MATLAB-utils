@@ -14,6 +14,7 @@ classdef SpectroSketch < handle
         BrushSettingsPanel          matlab.ui.container.Panel
 
         BrushAxes                   matlab.graphics.axis.Axes
+        BrushPreview                matlab.graphics.primitive.Image
 
         BrushTypeButtonGroup        matlab.ui.container.ButtonGroup
         SolidBrushButton            matlab.ui.control.UIControl
@@ -468,7 +469,6 @@ classdef SpectroSketch < handle
             spectrogramYFrac = 0.8;
             dividerH = 20;
             brushPanelFrac = 0.5;
-            brushAxesH = 100;
             brushTypeButtonGroupH = 7 * radioH;
             brushTypePanelXFrac = 0.4;
             buttonH = 30;
@@ -539,9 +539,9 @@ classdef SpectroSketch < handle
                 obj.SettingsPanel.Position = [dataPanelW, statusH, settingsPanelW, settingsPanelH];
                     brushSettingsPanelW = settingsPanelW; brushSettingsPanelH = settingsPanelH * brushPanelFrac;
                     obj.BrushSettingsPanel.Position = [0, 0, brushSettingsPanelW, brushSettingsPanelH];
-                        obj.BrushAxes.Position(4) = brushAxesH;
-                        brushAxesW = obj.BrushAxes.Position(3);
-                        obj.BrushAxes.Position = [0, brushSettingsPanelH - brushAxesH, brushAxesW, brushAxesH];
+                        obj.BrushAxes.DataAspectRatio = obj.SpectrogramAxes.DataAspectRatio;
+                        brushAxesH = brushSettingsPanelH - (brushTypeButtonGroupH + sliderH + labelH);
+                        obj.BrushAxes.Position = [0, brushSettingsPanelH - brushAxesH, settingsPanelW, brushAxesH];
                         obj.BrushTypeButtonGroup.Position =   [0, brushSettingsPanelH - brushAxesH - brushTypeButtonGroupH, brushSettingsPanelW * brushTypePanelXFrac, brushTypeButtonGroupH];
                             obj.SolidBrushButton.Position =   [0, brushTypeButtonGroupH - radioH * 2, brushSettingsPanelW, radioH];
                             obj.StackBrushButton.Position =   [0, brushTypeButtonGroupH - radioH * 3, brushSettingsPanelW, radioH];
@@ -626,7 +626,7 @@ classdef SpectroSketch < handle
             obj.AudioPlayer = audioplayer(obj.AudioData, obj.AudioSamplingRate);
         end
         function updateSpectrogramDisplay(obj)
-            power = 2*log(abs(obj.SpectrogramData)+eps)+20;
+            power = obj.getSpectrogramPower(obj.SpectrogramData);
             if isvalid(obj.SpectrogramImage)
                 obj.SpectrogramImage.CData = power;
                 obj.SpectrogramImage.XData = obj.TimeValues;
@@ -718,6 +718,15 @@ classdef SpectroSketch < handle
             [t, f] = obj.getCurrentSpectrogramPoint();
             [tidx, fidx] = obj.getBrushIdx(t, f);
             obj.BrushTextureAudioData = obj.SpectrogramData(fidx(1):fidx(2), tidx(1):tidx(2));
+            obj.updateBrushTextureAxes();
+        end
+        function updateBrushTextureAxes(obj)
+            delete(obj.BrushPreview);
+            obj.BrushPreview = imagesc(obj.BrushAxes, 'XData', (1:obj.BrushTIdxSize)*obj.dT, 'YData', (1:obj.BrushFIdxSize)*obj.dF, 'CData', obj.getSpectrogramPower(obj.BrushTextureAudioData));
+            obj.BrushAxes.YDir = "normal";
+            obj.BrushAxes.XLim = [1, obj.BrushTIdxSize] * obj.dT;
+            obj.BrushAxes.YLim = [1, obj.BrushFIdxSize] * obj.dF;
+            obj.BrushAxes.CLim = obj.SpectrogramCLim;
         end
         function brushMagnitude(obj, tidx, fidx, brush, options)
             arguments
@@ -1267,6 +1276,11 @@ classdef SpectroSketch < handle
             for t = obj.GridTimes
                 obj.GridTimeOverlay(k) = line(obj.SpectrogramAxes, [t, t], flim, 'Color', [0.2, 0.2, 0.2]);
             end
+        end
+    end
+    methods (Static)
+        function power = getSpectrogramPower(spectrogramData)
+            power = 2*log(abs(spectrogramData)+eps)+20;
         end
     end
 end
