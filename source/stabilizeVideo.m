@@ -103,7 +103,7 @@ function [shiftedFrame, x1, y1, x2, y2] = shiftFrame(frame, dx, dy)
 % Shift a single frame by the requested amount, and return it, along with
 %   the upper left and lower right coordinates of the resultant shifted 
 %   frame.
-[h, w] = size(frame);
+[h, w] = size(frame,[1,2]);
 x1 = max(1, 1 + dx);
 y1 = max(1, 1 + dy);
 x2 = min(w, w + dx);
