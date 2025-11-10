@@ -123,7 +123,12 @@ classdef VideoBrowser < handle
                 options.NavigationScrollMode {mustBeMember(options.NavigationScrollMode, {'centered', 'partial', 'sweep', 'none'})} = 'sweep' 
                 options.Title = '';
                 options.Async logical = true;
+                options.VideoFrameRate = 30
+                options.AudioSampleRate = 44100
             end
+
+            obj.VideoFrameRate = options.VideoFrameRate;
+            obj.AudioSampleRate = options.AudioSampleRate;
 
             obj.Async = options.Async;
 
