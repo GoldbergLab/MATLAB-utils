@@ -45,7 +45,7 @@ function [MATLAB_utils_path, functionList, commitDate, commitHash, branchName, u
     end
 
     [commitDate, commitHash, branchName, url] = getGitInfo('MATLAB_utils', 'CheckGit', false);
-    commitDate = datetime(commitDate, 'InputFormat', 'eee MMM d h:mm:ss yyyy');
+    commitDate = datetime(commitDate, 'InputFormat', 'eee MMM d H:mm:ss yyyy');
     functionList = findPaths(MATLAB_utils_source_path, functionRegex, 'CaseSensitive', false);
     
     if islogical(display) && display
