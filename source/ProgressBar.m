@@ -14,14 +14,33 @@ classdef ProgressBar < handle
         BackgroundColor {validatecolor} = 'white'
         BarColor {validatecolor} = 'cyan'
         Interpreter = 'none'
-        WindowStyle {mustBeMember(WindowStyle, {'alwaysontop', 'modal', 'docked', 'normal'})} = 'modal'
+        WindowStyle {mustBeMember(WindowStyle, {'modal', 'docked', 'normal'})} = 'modal'
     end
     methods
-        function obj = ProgressBar(message, centerOnWidget)
+        function obj = ProgressBar(message, centerOnWidget, options)
             arguments
                 message {mustBeText}
                 centerOnWidget = groot
+                options.Progress (1, 1) double {mustBeInRange(options.Progress, 0, 1)} = 0
+                options.Visible (1, 1) matlab.lang.OnOffSwitchState = 'on'
+                options.Message {mustBeText} = "Please wait"
+                options.BackgroundColor {validatecolor} = 'white'
+                options.BarColor {validatecolor} = 'cyan'
+                options.Interpreter = 'none'
+                options.WindowStyle {mustBeMember(options.WindowStyle, {'modal', 'docked', 'normal'})} = 'modal'
+                options.Width (1, 1) double = 250
+                options.Height (1, 1) double = 30
             end
+            obj.Progress = options.Progress;
+            obj.Visible = options.Visible;
+            obj.Message = options.Message;
+            obj.BackgroundColor = options.BackgroundColor;
+            obj.BarColor = options.BarColor;
+            obj.Interpreter = options.Interpreter;
+            obj.WindowStyle = options.WindowStyle;
+            obj.Width = options.Width;
+            obj.Height = options.Height;
+
             if centerOnWidget == groot
                 % Just center progress bar in the middle of the screen
                 set(0, 'units', 'pixels');
@@ -75,14 +94,29 @@ classdef ProgressBar < handle
         function delete(obj)
             delete(obj.Figure);
         end
+        function ready = figureReady(obj)
+            ready = isa(obj.Figure, 'matlab.ui.Figure') && ~isempty(obj.Figure) && isvalid(obj.Figure);
+        end
+        function ready = axesReady(obj)
+            ready = isa(obj.Axes, 'matlab.graphics.axis.Axes') && ~isempty(obj.Axes) && isvalid(obj.Axes);
+        end
+        function ready = barReady(obj)
+            ready = isa(obj.Bar, 'matlab.graphics.primitive.Rectangle') && ~isempty(obj.Bar) && isvalid(obj.Bar);
+        end
+        function ready = textReady(obj)
+            ready = isa(obj.Text, 'matlab.graphics.primitive.Text') && ~isempty(obj.Text) && isvalid(obj.Text);
+        end
     end
     methods (Access = private) % Updaters
         function updateProgress(obj)
             obj.Bar.Position = [0, 0, obj.Progress, 1];
+            if ~obj.figureReady(); return; end
             obj.Figure.Visible = 'on';
         end
         function updateColors(obj)
+            if ~obj.barReady(); return; end
             obj.Bar.FaceColor = obj.BarColor;
+            if ~obj.axesReady(); return; end
             obj.Axes.Color = obj.BackgroundColor;
         end
         function updateVisible(obj, visible)
@@ -90,19 +124,23 @@ classdef ProgressBar < handle
                 obj ProgressBar
                 visible = obj.Visible
             end
+            if ~obj.figureReady(); return; end
             obj.Figure.Visible = visible;
         end
         function updateText(obj)
+            if ~obj.textReady(); return; end
             obj.Text.String = obj.Message;
         end
-        function updateInterpreter(obj, interpreter)
-            obj.Text.Interpreter = interpreter;
+        function updateInterpreter(obj)
+            if ~obj.textReady(); return; end
+            obj.Text.Interpreter = obj.Interpreter;
         end
         function updateWindowStyle(obj, windowStyle)
             arguments
                 obj ProgressBar
-                windowStyle {mustBeMember(windowStyle, {'alwaysontop', 'modal', 'docked', 'normal'})} = 'modal'
+                windowStyle {mustBeMember(windowStyle, {'modal', 'docked', 'normal'})} = 'modal'
             end
+            if ~obj.figureReady(); return; end
             obj.Figure.WindowStyle = windowStyle;
         end
     end
@@ -154,7 +192,7 @@ classdef ProgressBar < handle
         function set.WindowStyle(obj, windowStyle)
             arguments
                 obj ProgressBar
-                windowStyle {mustBeMember(windowStyle, {'alwaysontop', 'modal', 'docked', 'normal'})} = 'modal'
+                windowStyle {mustBeMember(windowStyle, {'modal', 'docked', 'normal'})} = 'modal'
             end
             obj.updateWindowStyle(windowStyle);
         end
