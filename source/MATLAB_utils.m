@@ -1,4 +1,4 @@
-function [MATLAB_utils_path, functionList] = MATLAB_utils(display)
+function [MATLAB_utils_path, functionList, commitDate, commitHash, branchName, url] = MATLAB_utils(display)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % MATLAB_utils: reference/indicator function for MATLAB-utils repo
 % usage:  MATLAB_utils_path = MATLAB_utils(display)
@@ -44,14 +44,15 @@ function [MATLAB_utils_path, functionList] = MATLAB_utils(display)
         functionRegexDisplayText = '';
     end
 
-    if islogical(display) && display
-        [commitDate, commitHash, branchName, url] = getGitInfo('MATLAB_utils', 'CheckGit', false);
+    [commitDate, commitHash, branchName, url] = getGitInfo('MATLAB_utils', 'CheckGit', false);
+    commitDate = datetime(commitDate, 'InputFormat', 'eee MMM d h:mm:ss yyyy');
     
+    if islogical(display) && display
         fprintf('\n');
         fprintf('<strong>MATLAB-utils</strong> repository is installed!\n')
         fprintf('\n');
         fprintf('\t<strong>Path</strong>:              %s\n', MATLAB_utils_path);
-        fprintf('\t<strong>Commit timestamp</strong>:  %s\n', commitDate);
+        fprintf('\t<strong>Commit timestamp</strong>:  %s\n', string(commitDate));
         fprintf('\t<strong>git hash</strong>:          %s\n', commitHash(1:7));
         fprintf('\t<strong>git branch</strong>:        %s\n', branchName);
         fprintf('\t<strong>GitHub page</strong>:       <a href="%s">%s</a>\n', url, url);
