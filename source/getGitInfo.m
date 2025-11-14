@@ -28,7 +28,11 @@ arguments
 end
 
 if options.CheckGit
-    [gitStatus, ~] = system('where /q git');
+    if ispc()
+        [gitStatus, ~] = system('where /q git');
+    else
+        [gitStatus, ~] = system('which git');
+    end
     if gitStatus ~= 0
         error('To use getGitInfo, git must be installed and available on the system path. See https://ffmpeg.org/download.html.');
     end
