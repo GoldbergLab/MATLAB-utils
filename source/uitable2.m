@@ -105,7 +105,16 @@ classdef uitable2 < handle
                 obj.UpdateBackgroundColor();
             end
         end
-
+        function value = getWidth(obj)
+            % Get width of UITable in pixels
+            pos = getWidgetFigurePosition(obj.UITable);
+            value = pos(3);
+        end
+        function value = getHeight(obj)
+            % Get height of UITable in pixels
+            pos = getWidgetFigurePosition(obj.UITable);
+            value = pos(4);
+        end
         function value = get.Size(obj)
             value = size(obj.UITable.Data);
         end
