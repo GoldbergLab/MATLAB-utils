@@ -9,3 +9,5 @@ function NOP(varargin)
 % Intentionally does nothing
 
 % Thanks to Andrew Janke for this: https://stackoverflow.com/a/6348191/1460057
+
+varargout = {};
