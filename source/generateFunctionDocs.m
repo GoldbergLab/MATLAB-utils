@@ -79,7 +79,7 @@ if isempty(mfilepath)
 end
 lines = readlines2(mfilepath);
 
-regex = '\s*function\s+\[?\s*([a-zA-Z][a-zA-Z0-9_]*(\s*,\s*[a-zA-Z][a-zA-Z0-9_]*)*)\s*\]?\s*=\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\(\s*([a-zA-Z][a-zA-Z0-9_]*(\s*,\s*[a-zA-Z][a-zA-Z0-9_]*)*)\s*\)';
+regex = '\s*function\s+\[?\s*([a-zA-Z][a-zA-Z0-9_]*(\s*,\s*[a-zA-Z][a-zA-Z0-9_]*)*)\s*\]?\s*=?\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\(\s*([a-zA-Z][a-zA-Z0-9_]*(\s*,\s*[a-zA-Z][a-zA-Z0-9_]*)*)\s*\)';
 
 foundCallsign = false;
 
@@ -93,6 +93,41 @@ for k = 1:length(lines)
         break
     end
 end
+
+% % Attempt to find an arguments block
+% inside_arguments = false;
+% % argName1 (dimensions) class {validators} = defaultValue
+% argument_regex = '([a-zA-Z][a-zA-Z0-9_]*)(?: \(([0-9\,\:\ ]+)\))?(?: ([a-zA-Z][a-zA-Z0-9_]*))?(?: \{(.*)\})?(?:\ ?\=?\ ?(.*))';
+% arguments = struct();
+% for k = 1:length(lines)
+%     line = strip(lines{k});
+%     if ~inside_arguments
+%         if strcmp(line, 'arguments')
+%             inside_arguments = true;
+%             continue;
+%         end
+%     else
+%         if strcmp(line, 'end')
+%             inside_arguments = false;
+%             continue;
+%         end
+%     end
+% 
+%     if ~inside_arguments
+%         continue;
+%     end
+% 
+%     % We're inside an arguments block
+%     tokens = regexp(lines{k}, argument_regex, 'tokens');
+%     idx = length(arguments) + 1;
+%     if ~isempty(tokens)
+%         arguments(idx).nameValueStruct = tokens{1}{1};
+%         arguments(idx).argumentName = tokens{1}{2};
+%         arguments(idx).argumentType = tokens{1}{3};
+%         arguments(idx).argumentValidation = tokens{1}{4};
+%         arguments(idx).argumentDefault = tokens{1}{5};
+%     end
+% end
 
 if ~foundCallsign
     error('Could not parse function at %s', mfilepath);
