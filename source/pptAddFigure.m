@@ -1,15 +1,19 @@
 function [presentation, slide] = pptAddFigure(presentationOrPath, fig, slideNum)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % pptAddFigure: Add a figure to a new or existing presentation
-% usage: presentation = pptAddFigure(presentationOrPath)
+% usage: presentation = pptAddFigure()
+%        presentation = pptAddFigure(presentationOrPath)
 %        presentation = pptAddFigure(presentationOrPath, fig)
 %        presentation = pptAddFigure(presentationOrPath, fig, slideNum)
 %
 % where,
 %    presentationOrPath is either a path to an existing presentation, a
 %       path for a new presentation, an existing presentation object, or an
-%       empty array, which will use the currently active presentation.
-%    fig is a handle to a MATLAB figure to insert in the presentation
+%       empty array, which will use the currently active presentation. If
+%       omitted, the presentation currently active in PowerPoint will be 
+%       used
+%    fig is a handle to a MATLAB figure to insert in the presentation. If
+%       omitted, the gcf will be used
 %    slideNum is an optional index to insert the new slide. If omitted, the
 %       slide will be added at the end
 %    presentation is the presentation object
@@ -24,11 +28,18 @@ function [presentation, slide] = pptAddFigure(presentationOrPath, fig, slideNum)
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+arguments
+    presentationOrPath = []
+    fig = gcf()
+    slideNum = []
+end
+
+% Create powerpoint object
+ppt = actxserver('PowerPoint.Application');
 
 if ischar(presentationOrPath) && ~isempty(presentationOrPath)
     presentationPath = presentationOrPath;
     % User passed in path to open/create
-    ppt = actxserver('PowerPoint.Application');
     [folder, ~, ext] = fileparts(presentationPath);
     if isempty(folder)
         % Assume file refers to current working directory.
@@ -53,7 +64,6 @@ elseif isempty(presentationOrPath)
 else
     % User passed in ppt presentation object
     presentation = presentationOrPath;
-    presentationPath = '';
     try
         presentation.Name;
     catch
@@ -66,7 +76,7 @@ end
 % Get blank slide template
 blankSlideTemplate = presentation.SlideMaster.CustomLayouts.Item(7);
 % Determine slide number to use
-if ~exist('slideNum', 'var') || isempty(slideNum)
+if isempty(slideNum)
     slideNum = presentation.Slides.count+1;
 end
 % Create a new blank slide
@@ -81,7 +91,7 @@ try
     exportgraphics(fig, tempImagePath, 'ContentType', 'vector');
     exportSize = getExportSize(fig);
     [imageWidth, imageHeight] = scaleBoxToFitBox(exportSize(2), exportSize(1), slideWidth * (1-2*marginFactor), slideHeight * (1-2*marginFactor));
-    image = slide.Shapes.AddPicture(tempImagePath, 'msoFalse', 'msoTrue', slideWidth*marginFactor, slideHeight*marginFactor, imageWidth, imageHeight);
+    image = slide.Shapes.AddPicture(tempImagePath, 'msoFalse', 'msoTrue', slideWidth*marginFactor, slideHeight*marginFactor, imageWidth, imageHeight); %#ok<NASGU>
     
     delete(tempImagePath);
 catch ME
