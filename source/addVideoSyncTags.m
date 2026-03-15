@@ -1,4 +1,39 @@
 function newVideoData = addVideoSyncTags(videoPathIn, videoPathOut, bitXs, bitYs, options)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% addVideoSyncTags: Add synchronization tags to a video
+% usage: newVideoData = addVideoSyncTags(videoPathIn, videoPathOut, bitXs, 
+%                           bitYs, options)
+%
+% where,
+%    videoPathIn is a path to an input video
+%    videoPathOut is a path to the output video to save
+%    bitXs is one or more pixel X-values for where to put the sync tags
+%    bitYs is one or more pixel Y-values for where to put the sync tags
+%    Name/Value pairs can include:
+%       EnlargedSize
+%       BitRadius
+%       BackgroundRadius
+%       ProgressBar
+%    newVideoData is the sync tagged video as a 4D array
+%
+% This video adds synchronization tags to a video so a photodetector 
+%   mounted to the screen can record frame changes precisely. It's possible
+%   to add an arbitrary number of sync tags to each frame; each sync tag 
+%   displays one bit of the frame number.
+% Sync tags are black filled circles with either a white or black circle
+%   inside to represent a 1 or a 0 bit.
+% bitXs and bitYs define the X and Y coordinates of each bit of the sync
+%   tag circle centers. For convenience, if one of these is a vector, and 
+%   the other is a scalar, the scalar one is repeated to match the length 
+%   of the vector one.
+%
+% See also: 
+%
+% Version: 1.0
+% Author:  Brian Kardon
+% Email:   bmk27=cornell*org, brian*kardon=google*com
+% Real_email = regexprep(Email,{'=','*'},{'@','.'})
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 arguments
     videoPathIn {mustBeText}
     videoPathOut {mustBeText}
@@ -10,18 +45,23 @@ arguments
     options.ProgressBar = false
 end
 
+% Load the video data as a 4D array
 videoData = loadVideoData(videoPathIn, false);
 disp("Done loading video.")
 
+% Check that video is 4D, not 3D
 if ndims(videoData) ~= 4
     error("This video does not appear to be in color. At the moment, addVideoSyncTag only works with color video");
 end
 
+% Get current shape of video
 [H, W, C, N] = size(videoData);
 if C ~= 3
     error('Video must have three color channels');
 end
 
+% If user passed a non-empty value for EnlargedSize, pad the border of the
+%   video to match the desired size.
 if ~isempty(options.EnlargedSize)
     if ~isvector(options.EnlargedSize) || length(options.EnlargedSize) ~= 2
         error('EnlargedSize must be a 2-long vector')
@@ -31,16 +71,21 @@ if ~isempty(options.EnlargedSize)
     if eW < W || eH < H
         error('EnlargedSize must be greater than or equal to the current video size');
     end
+    % Determine how much padding is necessary
     padX = eW - W;
     padY = eH - H;
     padLeft = floor(padX / 2);
     padTop = floor(padY / 2);
+    % Create a larger array to hold the enlarged video
     newVideoData = zeros([eH, eW, C, N]);
+    % Place the video in the correct place in the larger array
     newVideoData(padTop:padTop+H-1, padLeft:padLeft+W-1, :, :) = videoData;
 else
+    % No enlargement requested
     newVideoData = videoData;
 end
 
+% Determine how many bits user requests
 nBits = max(length(bitXs), length(bitYs));
 % If x value is scalar, repeat it
 if isscalar(bitXs)
@@ -51,12 +96,13 @@ if isscalar(bitYs)
     bitYs = repmat(bitYs, [1, nBits]);
 end
 
-% Get bit bounding box
+% Get bit bounding box (faster to only operate on bounding box than whole frame)
 r = max(options.BitRadius, options.BackgroundRadius);
 minX = max(round(min(bitXs) - r), 1);
 maxX = min(round(max(bitXs) + r), W);
 minY = max(round(min(bitYs) - r), 1);
 maxY = min(round(max(bitYs) + r), H);
+% Display a progress bar
 if options.ProgressBar
     pb = ProgressBar('Adding sync tags to video...');
 end
