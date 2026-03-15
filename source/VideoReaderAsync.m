@@ -21,7 +21,7 @@ classdef VideoReaderAsync < handle
     end
     properties (Access = private)
         DataBuffer = uint8.empty
-        WorkerFuture parallel.FevalFuture
+        WorkerFuture %parallel.FevalFuture
         ProgressBar matlab.ui.Figure
         ProgressBarEnabled logical = false
         ProgressBarText char = ''

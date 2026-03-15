@@ -1,4 +1,4 @@
-function im = showAudioSpectrogram(audio, samplingRate, ax, flim, clim)
+function im = showAudioSpectrogram(audio, samplingRate, ax, flim, clim, options)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % showAudioSpectrogram: Display spectrogram of an audio signal as an array
 % usage:  power = showAudioSpectrogram(audio, samplingRate, ax, flim)
@@ -17,6 +17,8 @@ function im = showAudioSpectrogram(audio, samplingRate, ax, flim, clim)
 %       the spectrogram image. Default is [13.0000, 24.5000]. This is in
 %       the same format as the 'SonogramClim' field of the electro_gui
 %       defaults files.
+%    Name/Value options may include
+%       Coloramp: the name of a MATLAB colormap to use
 %    im is a handle to the resulting image object
 %    
 % Display a spectrogram suitable for audio data.  Based on Aaron 
@@ -31,14 +33,22 @@ function im = showAudioSpectrogram(audio, samplingRate, ax, flim, clim)
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+arguments
+    audio
+    samplingRate
+    ax = []
+    flim = []
+    clim = []
+    options.Colormap = 'parula';
+end
 
-if ~exist('ax', 'var') || isempty(ax)
+if isempty(ax)
     ax = gca();
 end
-if ~exist('flim', 'var') || isempty(flim)
+if isempty(flim)
     flim = [50, 7500];
 end
-if ~exist('clim', 'var') || isempty(clim)
+if isempty(clim)
     clim = [13.0000, 24.5000];
 end
 
@@ -66,7 +76,7 @@ xlim(ax, xl);
 im = imagesc(linspace(xl(1),xl(2), nTimeBins),f,power, 'Parent', ax);
 
 set(ax, 'YDir', 'normal');
-c = colormap(ax, 'parula');
+c = colormap(ax, options.Colormap);
 c(1, :) = [0, 0, 0];
 colormap(ax, c);
 set(ax, 'CLim', clim);

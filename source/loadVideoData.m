@@ -1,11 +1,10 @@
-function videoData = loadVideoData(videoFilename, varargin)
-%This currently works with grayscale avi and tif files
-
-if nargin > 1
-    makeGrayscale = varargin{1};
-else
-    makeGrayscale = true;
+function videoData = loadVideoData(videoFilename, makeGrayscale, frames)
+arguments
+    videoFilename (1, :) char
+    makeGrayscale (1, 1) logical = true
+    frames double = []
 end
+%This currently works with grayscale avi and tif files
 
 [~, ~, ext] = fileparts(videoFilename);
 
@@ -29,7 +28,7 @@ try
     if verbose
         disp('Loading using fastVideoReader...');
     end
-    videoData = fastVideoReader(videoFilename);
+    videoData = fastVideoReader(videoFilename, [], frames);
 catch
     if strcmp(ext, '.tif')
         % Check if file is a .tif file
@@ -38,10 +37,13 @@ catch
         end
         tiffInfo = imfinfo(videoFilename);
         numFrames = length(tiffInfo);
+        if isempty(frames)
+            frames = 1:numFrames;
+        end
         width = tiffInfo(1).Width;
         height = tiffInfo(1).Height;
         videoData = zeros([height, width, numFrames]);
-        for k = 1:numFrames
+        for k = frames
             videoData(:, :, k) = imread(videoFilename, k);
         end
     else
@@ -50,17 +52,29 @@ catch
                 disp('Loading using read method with VideoReader')
             end
             video = VideoReader(videoFilename);
-            videoData = read(video);
+            if isempty(frames)
+                videoData = read(video);
+            else
+                videoData = read(video, [min(frames), max(frames)]);
+                videoData = videoData(:, :, frames-min(frames)+1);
+            end
         catch
             try
                 if verbose
                     disp('Loading using read method with VideoReader and native option')
                 end
                 video = VideoReader(videoFilename);
-                videoDataStruct = read(video, [1, video.NumberOfFrames], 'native');
+                if isempty(frames)
+                    videoDataStruct = read(video, [1, video.NumFrames], 'native');
+                else
+                    videoDataStruct = read(video, [min(frames), max(frames)], 'native');
+                end
                 videoData = zeros([size(videoDataStruct(1).cdata), length(videoDataStruct)]);
                 for k = 1:length(videoDataStruct)
                     videoData(:, :, k) = videoDataStruct(k).cdata;
+                end
+                if ~isempty(frames)
+                    videoData = videoData(:, :, frames-min(frames)+1);
                 end
             catch
                 try
@@ -69,10 +83,17 @@ catch
                     end
                     video = VideoReader(videoFilename);
                     %    disp('Attempting to load video with method #1');
-                    videoDataStruct = read(video, [1, Inf], 'native');
+                    if isempty(frames)
+                        videoDataStruct = read(video, [1, Inf], 'native');
+                    else
+                        videoDataStruct = read(video, [min(frames), Inf], 'native');
+                    end
                     videoData = zeros([size(videoDataStruct(1).cdata), length(videoDataStruct)]);
                     for k = 1:length(videoDataStruct)
                         videoData(:, :, k) = videoDataStruct(k).cdata;
+                    end
+                    if ~isempty(frames)
+                        videoData = videoData(:, :, frames-min(frames)+1);
                     end
                 catch
                     if verbose
@@ -84,6 +105,12 @@ catch
                     while hasFrame(video)
                         videoData(:, :, frameNum) = video.readFrame('native').cdata;
                         frameNum = frameNum + 1;
+                        if ~isempty(frames) && frameNum > max(frames)
+                            break
+                        end
+                    end
+                    if ~isempty(frames)
+                        videoData = videoData(:, :, frames);
                     end
                 end
             end

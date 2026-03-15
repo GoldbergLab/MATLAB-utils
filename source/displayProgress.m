@@ -1,4 +1,4 @@
-function displayProgress(template, index, total, numUpdates)
+function displayProgress(template, index, total, numUpdates, gui)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % displayProgress: Show intermittent progress updates
 % usage:  displayProgress(template, index, total, numUpdates)
@@ -12,6 +12,9 @@ function displayProgress(template, index, total, numUpdates)
 %    numUpdates is the approximate number of update to show. If omitted or
 %       empty, an update will be displayed for every call; in that case
 %       displayProgress is equivalent to fprintf.
+%    gui is an optional boolean flag indicating whether or not to display a
+%       modal progress bar in addition to the command window output.
+%       Default is false.
 %
 % A common repetitive problem is displaying intermittent progress updates
 %   for a long-running process without excessive output. This is a quick
@@ -24,11 +27,38 @@ function displayProgress(template, index, total, numUpdates)
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+arguments
+    template char
+    index (1, 1) double
+    total (1, 1) double
+    numUpdates double = 20
+    gui (1, 1) logical = false
+end
 
-if ~exist('numUpdates', 'var') || isempty(numUpdates)
+persistent progressBar
+
+if isempty(template)
+    % Use default template
+    template = 'Done with %d of %d\n';
+end
+if isempty(numUpdates)
+    % Default is one update for every call
     numUpdates = total;
 end
 
+if gui
+    progressBar = waitbar(0, '', 'WindowStyle', 'modal');
+end
+
 if mod(index, ceil(total/numUpdates)) == 0
-    fprintf(template, index, total);
+    msg = sprintf(template, index, total);
+    if gui
+        waitbar(index/total, progressBar, msg);
+    else
+        fprintf(msg);
+    end
+end
+
+if index == total
+    close(progressBar);
 end

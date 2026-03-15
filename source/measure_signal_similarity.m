@@ -20,8 +20,9 @@ function similarity_score = measure_signal_similarity(signal1, signal2, sampling
 %       [50, 7500]
 %    method is an optional char array indicating which similarity
 %       comparison method should be used. The options are 
-%           abs_diff
+%           abs_diff (default)
 %           xcorr
+%           ssim
 %       See below for explanations of the algorithms.
 %    cached_spectrograms is an optional boolean flag indicating that
 %       signal1 and signal2 are pre-made spectrograms, rather than 1D
@@ -104,19 +105,13 @@ function similarity_score = measure_signal_similarity(signal1, signal2, sampling
 % Email:   bmk27=cornell*org, brian*kardon=google*com
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Set default arguments where necessary
-if ~exist('sampling_rate', 'var') || isempty(sampling_rate)
-    sampling_rate = 20000;
-end
-if ~exist('flim', 'var')
-    flim = [];
-end
-if ~exist('cached_spectrograms', 'var') || isempty(cached_spectrograms)
-    cached_spectrograms = false;
-end
-if ~exist('method', 'var') || isempty(method)
-    method = 'abs_diff';
+arguments
+    signal1
+    signal2
+    sampling_rate = 20000
+    flim = [50, 7500]
+    method = 'abs_diff'
+    cached_spectrograms = false
 end
 
 % If only one sampling rate was provided, use the same sampling rate for

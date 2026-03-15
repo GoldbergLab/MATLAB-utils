@@ -6,7 +6,9 @@ function inputs = getInputs(titleText, names, defaults, descriptions, options)
 % where,
 %    titleText is a char array to use as a dialog title
 %    names is a cell array of names
-%    defaults is a cell array of default values, of the same size as names
+%    defaults is a cell array of default values, of the same size as names.
+%       The type of each default determines the style of each input widget
+%       (see below)
 %    descriptions is a cell array of descriptions of each parameter, of the
 %       same size as names
 %    inputs is a cell array containing the values the user chose, in the 
@@ -14,8 +16,14 @@ function inputs = getInputs(titleText, names, defaults, descriptions, options)
 %       cancel, inputs will be an empty cell array.
 %
 % Create a parameter dialog for an arbitrary number and type of parameters.
+%   The data type of each entry in the "defaults" cell array determins the
+%   input widget type used to collect that information:
+%       char/string => text input
+%       numerical   => text numerical input
+%       logical     => checkbox
+%       categorical => popup list
 %
-% See also: <related functions>
+% See also:
 %
 % Version: 1.0
 % Author:  Brian Kardon
@@ -25,13 +33,21 @@ function inputs = getInputs(titleText, names, defaults, descriptions, options)
 arguments
     titleText char
     names cell
-    defaults cell = cell(1, length(names))
-    descriptions cell = cell(1, length(names))
+    defaults cell = {}
+    descriptions cell = {}
     options.Position double = []
     options.PositionUnit char = 'normalized'
 end
 
 numInputs = length(names);
+
+if isempty(descriptions)
+    descriptions = cell(1, numInputs);
+end
+
+if isempty(defaults)
+    defaults = repmat({''}, 1, numInputs);
+end
 
 titleCharacterHeight = 2.5;
 buttonHeight = 2;
@@ -65,7 +81,7 @@ for inputNum = 1:numInputs
     default = defaults{inputNum};
     inputClass = class(default);
     switch inputClass
-        case 'char'
+        case {'char', 'string'}
             % Text input
             style = 'edit';
             string = default;

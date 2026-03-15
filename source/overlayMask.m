@@ -1,6 +1,6 @@
 function overlayImage = overlayMask(image, mask, color, transparency, origin)
 % overlayMask: create an overlay image using an input image and a mask
-% usage:  overlayImage = overlayMask(im, mask, 'green', 0.5)
+% usage:  overlayImage = overlayMask(im, mask, color, transparency)
 %
 % where,
 %    image is one of the following:
@@ -24,7 +24,9 @@ function overlayImage = overlayMask(image, mask, color, transparency, origin)
 %       upper left pixel of the mask should be placed, or a cell array
 %       of origin 2-vectors, one per mask. Default is [1, 1].
 %
-% overlayMask takes a 2D image and a 2D mask and overlays the 
+% overlayMask takes images and masks and overlays the masks using the
+%   specified color and transparency. It can handle a variety of
+%   combinations of 2D, 3D, and 4D images and masks.
 %
 % See also: <related functions>
 
@@ -84,7 +86,7 @@ switch ndims(image)
         nImageChannels = 1;
     case 3
         if size(image, 3) == 3
-            % Must be a single RGB image
+            % Probably a single RGB image
             nImageFrames = 1;
             nImageChannels = 3;
         else
@@ -107,6 +109,13 @@ if nImageChannels == 1
     image = cat(length(size(image))+1, image, image, image);
 end
 
+% Check that transparency is in [0, 1]
+for k = 1:length(transparency)
+    if transparency{k} < 0 || transparency{k} > 1
+        error(['transparency must be in the range [0, 1]. Instead, transparency was ', transparency{k}])
+    end
+end
+
 for k = 1:length(mask)
     if isempty(mask{k})
         continue;
@@ -114,38 +123,35 @@ for k = 1:length(mask)
     if ~islogical(mask{k})
         mask{k} = logical(mask{k});
     end
-    [mask{k}, ylimits, xlimits] = cropMask(mask{k});
-    if isempty(mask{k})
-        continue;
-    end
-    origin{k} = origin{k} + [xlimits(1), ylimits(1)] - 1;
+%     [mask{k}, ylimits, xlimits] = cropMask(mask{k});
+%     if isempty(mask{k})
+%         continue;
+%     end
+%     if isrow(color{k})
+%         color{k} = color{k}';
+%     end
+%     origin{k} = origin{k} + [xlimits(1), ylimits(1)] - 1;
     switch ndims(mask{k})
         case 2
             if nImageFrames == 1
                 % Image is a 3D color image
                 % Mask is a single 2D image. Make it a 3D color image to
                 % match image.
-                mask{k} = cat(3, mask{k}*color{k}(1), mask{k}*color{k}(2), mask{k}*color{k}(3));
+                mask{k} = tensorprod(double(mask{k}), color{k} * (1 - transparency{k}));
             else
                 % Image is a 4D color stack
                 % Mask is a single 2D image. Make it a 4D color stack to
                 % match image.
-                mask{k} = repmat(reshape(cat(3, mask{k}*color{k}(1), mask{k}*color{k}(2), mask{k}*color{k}(3)), [1, size(mask{k}), 3]), [nImageFrames, 1, 1, 1]);
+                mask{k} = repmat(reshape(tensorprod(double(mask{k}), color{k} * (1 - transparency{k})), [1, size(mask{k}), 3]), [nImageFrames, 1, 1, 1]);
 %                 mask{k} = permute(repmat(mask{k}, [1, 1, 3, nImageFrames]), [4, 1, 2, 3]);
             end
         case 3
             % Mask is a 3D stack. Make it a 4D color image
-            mask{k} = cat(4, mask{k}*color{k}(1), mask{k}*color{k}(2), mask{k}*color{k}(3));
+%             mask{k} = cat(4, mask{k}*color{k}(1), mask{k}*color{k}(2), mask{k}*color{k}(3));
+            mask{k} = tensorprod(double(mask{k}), color{k} * (1 - transparency{k}));
 %             mask{k} = repmat(mask{k}, [1, 1, 1, 3]);
         otherwise
             error('Invalid mask dimensions: %s', num2str(size(mask{k})))
-    end
-end
-
-% Check that transparency is in [0, 1]
-for k = 1:length(transparency)
-    if transparency{k} < 0 || transparency{k} > 1
-        error(['transparency must be in the range [0, 1]. Instead, transparency was ', transparency{k}])
     end
 end
 
@@ -181,16 +187,20 @@ for k = 1:length(mask)
     hm = size(mask{k}, length(size(mask{k}))-2);
 
     [x1, x2, y1, y2, overlaps] = getRectangleOverlap(1, w, 1, h, thisOrigin(1), thisOrigin(1) + wm - 1, thisOrigin(2), thisOrigin(2) + hm - 1);
-
     if overlaps
-        x1m = x1 - thisOrigin(1) + 1;
-        y1m = y1 - thisOrigin(2) + 1;
-        x2m = x2 - thisOrigin(1) + 1;
-        y2m = y2 - thisOrigin(2) + 1;
-        if nImageFrames == 1
-            overlayImage(y1:y2, x1:x2, :) = overlayImage(y1:y2, x1:x2, :) + mask{k}(y1m:y2m, x1m:x2m, :)*(1 - transparency{k});
+        if (x1 == 1 && x2 == w && y1 == 1 && y2 == h)
+            overlayImage = overlayImage + mask{k};
+            disp('simple overlay')
         else
-            overlayImage(:, y1:y2, x1:x2, :) = overlayImage(:, y1:y2, x1:x2, :) + mask{k}(:, y1m:y2m, x1m:x2m, :)*(1 - transparency{k});
+            x1m = x1 - thisOrigin(1) + 1;
+            y1m = y1 - thisOrigin(2) + 1;
+            x2m = x2 - thisOrigin(1) + 1;
+            y2m = y2 - thisOrigin(2) + 1;
+            if nImageFrames == 1
+                overlayImage(y1:y2, x1:x2, :) = overlayImage(y1:y2, x1:x2, :) + mask{k}(y1m:y2m, x1m:x2m, :);
+            else
+                overlayImage(:, y1:y2, x1:x2, :) = overlayImage(:, y1:y2, x1:x2, :) + mask{k}(:, y1m:y2m, x1m:x2m, :);
+            end
         end
     end
 end

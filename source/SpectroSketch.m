@@ -468,7 +468,7 @@ classdef SpectroSketch < handle
             settingsXFrac = 0.25;
             spectrogramYFrac = 0.8;
             dividerH = 20;
-            brushPanelFrac = 0.5;
+            brushPanelFrac = 0.75;
             brushTypeButtonGroupH = 7 * radioH;
             brushTypePanelXFrac = 0.4;
             buttonH = 30;
@@ -537,7 +537,8 @@ classdef SpectroSketch < handle
                         obj.SpectrogramAxes.Position = [0, 0, spectrogramPanelW, spectrogramPanelH];
                 settingsPanelW = figW * settingsXFrac; settingsPanelH = figH - statusH;
                 obj.SettingsPanel.Position = [dataPanelW, statusH, settingsPanelW, settingsPanelH];
-                    brushSettingsPanelW = settingsPanelW; brushSettingsPanelH = settingsPanelH * brushPanelFrac;
+                    brushSettingsPanelW = settingsPanelW; 
+                    brushSettingsPanelH = settingsPanelH * brushPanelFrac;
                     obj.BrushSettingsPanel.Position = [0, 0, brushSettingsPanelW, brushSettingsPanelH];
                         obj.BrushAxes.DataAspectRatio = obj.SpectrogramAxes.DataAspectRatio;
                         brushAxesH = brushSettingsPanelH - (brushTypeButtonGroupH + sliderH + labelH);
@@ -718,15 +719,18 @@ classdef SpectroSketch < handle
             [t, f] = obj.getCurrentSpectrogramPoint();
             [tidx, fidx] = obj.getBrushIdx(t, f);
             obj.BrushTextureAudioData = obj.SpectrogramData(fidx(1):fidx(2), tidx(1):tidx(2));
-            obj.updateBrushTextureAxes();
+            obj.updateBrushTexturePreview();
         end
-        function updateBrushTextureAxes(obj)
+        function updateBrushTexturePreview(obj)
             delete(obj.BrushPreview);
             obj.BrushPreview = imagesc(obj.BrushAxes, 'XData', (1:obj.BrushTIdxSize)*obj.dT, 'YData', (1:obj.BrushFIdxSize)*obj.dF, 'CData', obj.getSpectrogramPower(obj.BrushTextureAudioData));
             obj.BrushAxes.YDir = "normal";
             obj.BrushAxes.XLim = [1, obj.BrushTIdxSize] * obj.dT;
             obj.BrushAxes.YLim = [1, obj.BrushFIdxSize] * obj.dF;
             obj.BrushAxes.CLim = obj.SpectrogramCLim;
+            c = colormap();
+            c(1, :) = [0, 0, 0];
+            colormap(obj.BrushAxes, c);
         end
         function brushMagnitude(obj, tidx, fidx, brush, options)
             arguments

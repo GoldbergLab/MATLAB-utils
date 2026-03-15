@@ -43,6 +43,7 @@ for j = 1:N
 %     vertices = [x, y, z];
     connectivity = [];
     voxelCount = 0;
+    invalidPointIndices = [];
     for idx = surfIdx
         voxelCount = voxelCount + 1;
         displayProgress('%d of %d\n', voxelCount, length(surfIdx), 100)
@@ -52,11 +53,16 @@ for j = 1:N
         neighborIdx = sub2ind(size(mask), neighbors(:, 1), neighbors(:, 2), neighbors(:, 3));
         % Filter for voxels in this region
         neighborIdx = neighborIdx(surface_mask_labels(neighborIdx)==j);
+        if length(neighborIdx) < 3
+            invalidPointIndices(end+1) = idx;
+            continue;
+        end
         % Triangulate region
         localConnectivity = permutations(neighborIdx, 2, true);
         localConnectivity(:, 3) = idx;
         connectivity = [connectivity; localConnectivity];
     end
+    xyz(invalidPointIndices) = [];
     connectivity = unique(sort(connectivity, 2), 'rows');
 %    [connectivityList, vertices] = isosurface(surface_mask_labels, j);
     DT = triangulation(connectivity, xyz);

@@ -12,7 +12,8 @@ function videoStats = getVideoStats(videoPath, tags)
 %       of the statistic given by tag1 for the kth frame of the video
 %
 % If you call this function with no arguments, a list of valid tags will
-%   be printed to the console.
+%   be printed to the console. Note that this function requires that
+%   ffprobe is installed and available on the system path.
 %
 % See also: getVideoInfo, loadVideoData
 %
