@@ -28,6 +28,8 @@ classdef StatusBar < handle
         TextColor (1, 3) double = [0, 0, 0]     % Status text color
         FontSize (1, 1) double = 9               % Font size for status text
         BorderColor (1, 3) double = [0.7, 0.7, 0.7]  % Border color
+        AutoClear (1, 1) logical = false             % Automatically clear after reaching 100%
+        AutoClearDelay (1, 1) double = 3             % Seconds to wait before auto-clearing
     end
 
     %% Forwarded properties (get/set passed to the axes)
@@ -45,6 +47,7 @@ classdef StatusBar < handle
         TextHandle matlab.graphics.primitive.Text
         ProgressPatch matlab.graphics.primitive.Patch
         BackgroundPatch matlab.graphics.primitive.Patch
+        AutoClearTimer timer = timer.empty  % Single-shot timer for auto-clear
     end
 
     %% Constructor
@@ -120,6 +123,12 @@ classdef StatusBar < handle
             end
             obj.Progress = value;
             obj.updateProgressDisplay();
+            % Cancel any pending auto-clear timer
+            obj.cancelAutoClearTimer();
+            % Start auto-clear countdown if progress reached 100%
+            if obj.AutoClear && ~isempty(value) && value >= 1
+                obj.startAutoClearTimer();
+            end
         end
 
         function set.HorizontalAlignment(obj, value)
@@ -212,12 +221,14 @@ classdef StatusBar < handle
     methods
         function reset(obj)
             % Clear the status text and hide the progress bar.
+            obj.cancelAutoClearTimer();
             obj.Status = '';
             obj.Progress = [];
         end
 
         function delete(obj)
-            % Clean up the axes when the StatusBar is destroyed.
+            % Clean up the timer and axes when the StatusBar is destroyed.
+            obj.cancelAutoClearTimer();
             if ~isempty(obj.Axes) && isvalid(obj.Axes)
                 delete(obj.Axes);
             end
@@ -226,6 +237,25 @@ classdef StatusBar < handle
 
     %% Private methods
     methods (Access = private)
+        function startAutoClearTimer(obj)
+            % Start a single-shot timer that calls reset() after the
+            % configured delay.
+            obj.AutoClearTimer = timer( ...
+                'StartDelay', obj.AutoClearDelay, ...
+                'ExecutionMode', 'singleShot', ...
+                'TimerFcn', @(~,~) obj.reset());
+            start(obj.AutoClearTimer);
+        end
+
+        function cancelAutoClearTimer(obj)
+            % Stop and delete any pending auto-clear timer.
+            if ~isempty(obj.AutoClearTimer) && isvalid(obj.AutoClearTimer)
+                stop(obj.AutoClearTimer);
+                delete(obj.AutoClearTimer);
+            end
+            obj.AutoClearTimer = timer.empty;
+        end
+
         function updateProgressDisplay(obj)
             % Update the progress bar patch visibility and size.
             if isempty(obj.Progress)
