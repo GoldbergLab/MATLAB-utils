@@ -1,22 +1,76 @@
 classdef uitable2 < handle
+    % uitable2  Wrapper around MATLAB's uitable with per-row background
+    %   colors and row-selection tracking.
+    %
+    %   MATLAB's built-in uitable only supports alternating-row striping
+    %   via its BackgroundColor property — it cannot assign a unique color
+    %   to each row. uitable2 fills that gap by maintaining a separate
+    %   UserBackgroundColor matrix (Nx3) that maps one RGB color to each
+    %   row, and compositing it with a RowSelectionColor highlight for the
+    %   currently selected row.
+    %
+    %   uitable2 also adds row-selection semantics on top of uitable's
+    %   cell-selection model: clicking a cell sets SelectedRow to that
+    %   cell's row index, and fires the user-supplied CellSelectionCallback.
+    %   The ColumnSelectable property controls which columns can trigger a
+    %   row-selection change (useful when some columns hold non-interactive
+    %   content).
+    %
+    %   All other uitable properties are passed through transparently via
+    %   get/set methods, so uitable2 can be used as a drop-in replacement
+    %   in most contexts.
+    %
+    %   Usage:
+    %       t = uitable2(parentFigureOrPanel, ...
+    %           'Data', {'Row 1'; 'Row 2'; 'Row 3'}, ...
+    %           'ColumnName', {}, 'RowName', {}, ...
+    %           'ColumnEditable', false, ...
+    %           'RowStriping', 'off', ...
+    %           'ColumnSelectable', true, ...
+    %           'CellSelectionCallback', @(src,evt) disp(evt));
+    %
+    %       % Set per-row background colors (Nx3 RGB)
+    %       t.BackgroundColor = [1 0.8 0.8; 0.8 1 0.8; 0.8 0.8 1];
+    %
+    %       % Reset all rows to white (or a custom base color)
+    %       t.ResetBackgroundColor();
+    %
+    %       % Read which row is selected
+    %       disp(t.SelectedRow);
+    %
+    %   See also: uitable
+
     %% Additional properties
     properties (SetAccess = private)
-        PreviousSelection = []
-        Selection       = []
-        Size
-        NumRows
-        NumColumns
+        PreviousSelection = []  % Cell indices of the previous selection (Mx2)
+        Selection       = []    % Cell indices of the current selection (Mx2)
+        Size                    % [numRows, numColumns] of the Data
+        NumRows                 % Number of rows in Data
+        NumColumns              % Number of columns in Data
     end
     properties (Access = private)
+        % Internal per-row color storage. Set via the BackgroundColor
+        % setter, which validates size. The actual uitable BackgroundColor
+        % is recomputed by UpdateBackgroundColor to composite this with the
+        % RowSelectionColor highlight.
         UserBackgroundColor = ones(0, 3);
     end
     properties
+        % RGB color used to highlight the currently selected row.
         RowSelectionColor = [0.7, 0.7, 1];
+        % Index of the selected row (scalar), or empty if none.
         SelectedRow     = []
-        ColumnSelectable = logical.empty()   % Can a click in this column change the row selection?
+        % Logical row vector (1 x NumColumns). When true, clicking a cell
+        % in that column will update SelectedRow. When false, the click
+        % still fires CellSelectionCallback but does not change the row
+        % highlight. Automatically resized when Data changes.
+        ColumnSelectable = logical.empty()
     end
     properties
         %% Overridden properties
+        % User-supplied callback fired after row selection updates. Called
+        % with the same (src, event) arguments as uitable's native
+        % CellSelectionCallback.
         CellSelectionCallback function_handle = @NOP
     end
     properties
@@ -67,13 +121,37 @@ classdef uitable2 < handle
     end
     methods
         function obj = uitable2(varargin)
+            % Extract uitable2-specific name-value pairs from the
+            % arguments before forwarding the rest to the native uitable
+            % constructor. The extracted properties are applied after the
+            % UITable is created, since their setters may depend on it.
+            ownProps = {'ColumnSelectable', 'CellSelectionCallback', ...
+                        'RowSelectionColor', 'SelectedRow'};
+            deferred = struct();
+            for propIdx = 1:length(ownProps)
+                matchIdx = find(strcmpi(ownProps{propIdx}, varargin), 1);
+                if ~isempty(matchIdx)
+                    deferred.(ownProps{propIdx}) = varargin{matchIdx + 1};
+                    varargin(matchIdx:matchIdx+1) = [];
+                end
+            end
+
             obj.UITable = uitable(varargin{:});
             obj.UITable.Interruptible = 'off';
             obj.UITable.BusyAction = 'queue';
             obj.UITable.CellSelectionCallback = @obj.SelectionCallback;
+
+            % Apply extracted uitable2-specific properties
+            deferredNames = fieldnames(deferred);
+            for propIdx = 1:length(deferredNames)
+                obj.(deferredNames{propIdx}) = deferred.(deferredNames{propIdx});
+            end
         end
 
         function SelectionCallback(obj, src, event)
+            % Internal CellSelectionCallback that intercepts the native
+            % uitable event, updates SelectedRow and the row highlight,
+            % then forwards to the user's CellSelectionCallback.
             if ~isempty(event.Indices) && ~isequal(obj.Selection, event.Indices)
                 % Update PreviousSelection property
                 obj.PreviousSelection = obj.Selection;
@@ -150,6 +228,8 @@ classdef uitable2 < handle
             end
         end
         function ResetBackgroundColor(obj, color)
+            % Reset all row background colors to a uniform color (default
+            % white). Call after setting Data if you want a clean slate.
             arguments
                 obj          uitable2
                 color (1, 3) double   = [1, 1, 1]
@@ -158,8 +238,8 @@ classdef uitable2 < handle
             obj.UpdateBackgroundColor();
         end
         function UpdateBackgroundColor(obj)
-            % Attempt to shoehorn background color into the same size as
-            % the data
+            % Recompute the actual uitable BackgroundColor by compositing
+            % UserBackgroundColor with the RowSelectionColor highlight.
             obj.UpdateBackgroundColorSize();
             backgroundColor = obj.UserBackgroundColor;
             if ~isempty(obj.SelectedRow)
@@ -167,7 +247,31 @@ classdef uitable2 < handle
             end
             temp = obj.UITable.CellSelectionCallback;
             obj.UITable.CellSelectionCallback = @NOP;
-            obj.UITable.BackgroundColor = backgroundColor;
+            try
+                % R2025b+: figure() and uifigure() are unified, so
+                % addStyle/removeStyle work on all uitables. Per-row
+                % BackgroundColor no longer renders correctly, so we
+                % must use uistyle instead.
+                %
+                % To avoid performance issues with large tables, batch
+                % rows that share the same color into a single addStyle
+                % call rather than one call per row.
+                removeStyle(obj.UITable);
+                [uniqueColors, ~, colorGroupIdx] = unique(backgroundColor, 'rows');
+                for groupIdx = 1:size(uniqueColors, 1)
+                    rowIndices = find(colorGroupIdx == groupIdx);
+                    addStyle(obj.UITable, ...
+                        uistyle('BackgroundColor', uniqueColors(groupIdx, :)), ...
+                        'row', rowIndices);
+                end
+            catch
+                % Pre-R2025b: addStyle only works in uifigure-based
+                % tables. Fall back to the BackgroundColor property.
+                % RowStriping must be 'on' for per-row BackgroundColor
+                % to render correctly on Swing-backed figures.
+                obj.UITable.RowStriping = 'on';
+                obj.UITable.BackgroundColor = backgroundColor;
+            end
             obj.UITable.CellSelectionCallback = temp;
         end
 
@@ -246,7 +350,16 @@ classdef uitable2 < handle
         end
         
         function value = get.BackgroundColor(obj)
-            value = obj.UITable.BackgroundColor;
+            % Return the per-row color matrix when per-row coloring is
+            % active, so that subscripted assignment (e.g.,
+            % obj.BackgroundColor(rows,:) = colors) modifies the correct
+            % state. If no per-row colors have been set, return the
+            % underlying UITable's cycling pattern.
+            if size(obj.UserBackgroundColor, 1) == obj.NumRows
+                value = obj.UserBackgroundColor;
+            else
+                value = obj.UITable.BackgroundColor;
+            end
         end
         
         function value = get.RowStriping(obj)
@@ -419,11 +532,20 @@ classdef uitable2 < handle
         end
 
         function set.BackgroundColor(obj, value)
-            if size(value, 1) ~= obj.Size(1) || size(value, 2) ~= 3
-                error('Background color size must be a Mx3 array, where M is the number of rows in the data');
+            if size(value, 2) ~= 3
+                error('BackgroundColor must be an Mx3 array of RGB values.');
             end
-            obj.UserBackgroundColor = value;
-            obj.UpdateBackgroundColor();
+            numRows = obj.Size(1);
+            if size(value, 1) == numRows
+                % Per-row coloring: one color per data row
+                obj.UserBackgroundColor = value;
+                obj.UpdateBackgroundColor();
+            else
+                % Cycling pattern (e.g., 2- or 3-row alternating
+                % stripe colors). Pass directly to the underlying
+                % uitable — this is the native BackgroundColor behavior.
+                obj.UITable.BackgroundColor = value;
+            end
         end
         
         function set.RowStriping(obj, value)
