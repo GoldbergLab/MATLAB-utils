@@ -248,9 +248,16 @@ classdef StatusBar < handle
         end
 
         function cancelAutoClearTimer(obj)
-            % Stop and delete any pending auto-clear timer.
+            % Stop and delete any pending auto-clear timer. The try/catch
+            % around stop() handles the case where this is called from
+            % within the timer's own callback (via reset()), in which case
+            % the timer may already be in a state where stop() throws.
             if ~isempty(obj.AutoClearTimer) && isvalid(obj.AutoClearTimer)
-                stop(obj.AutoClearTimer);
+                try
+                    stop(obj.AutoClearTimer);
+                catch
+                    % Timer may be executing or already stopped
+                end
                 delete(obj.AutoClearTimer);
             end
             obj.AutoClearTimer = timer.empty;
