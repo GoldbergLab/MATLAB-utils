@@ -57,6 +57,9 @@ classdef uitable2 < handle
     end
     properties
         % RGB color used to highlight the currently selected row.
+        % Blended 50/50 with the row's background color so the
+        % underlying color remains visible. Set to [] to disable
+        % selection highlighting entirely.
         RowSelectionColor = [0.7, 0.7, 1];
         % Index of the selected row (scalar), or empty if none.
         SelectedRow     = []
@@ -65,6 +68,10 @@ classdef uitable2 < handle
         % still fires CellSelectionCallback but does not change the row
         % highlight. Automatically resized when Data changes.
         ColumnSelectable = logical.empty()
+        % When true, the native uitable selection highlight is cleared
+        % immediately after recording the selection. Useful when per-row
+        % background colors should remain fully visible.
+        ClearNativeSelection logical = false
     end
     properties
         %% Overridden properties
@@ -126,7 +133,8 @@ classdef uitable2 < handle
             % constructor. The extracted properties are applied after the
             % UITable is created, since their setters may depend on it.
             ownProps = {'ColumnSelectable', 'CellSelectionCallback', ...
-                        'RowSelectionColor', 'SelectedRow'};
+                        'RowSelectionColor', 'SelectedRow', ...
+                        'ClearNativeSelection'};
             deferred = struct();
             for propIdx = 1:length(ownProps)
                 matchIdx = find(strcmpi(ownProps{propIdx}, varargin), 1);
@@ -158,11 +166,15 @@ classdef uitable2 < handle
                 % Update Selection property
                 obj.Selection = event.Indices;
                 if isempty(event.Indices) || obj.ColumnSelectable(event.Indices(1, 2))
-                    % First selection index is not in a non-selectable column.
-                    % Update SelectedRow
                     % Update SelectedRow property
                     obj.SelectedRow = min(obj.Selection(:, 1));
                     obj.UpdateBackgroundColor();
+                end
+                % Clear the native uitable selection highlight so it
+                % doesn't obscure per-row background colors
+                if obj.ClearNativeSelection
+                    drawnow('limitrate');
+                    obj.UITable.Selection = [];
                 end
                 % Call callback
                 obj.CellSelectionCallback(src, event);
@@ -242,8 +254,12 @@ classdef uitable2 < handle
             % UserBackgroundColor with the RowSelectionColor highlight.
             obj.UpdateBackgroundColorSize();
             backgroundColor = obj.UserBackgroundColor;
-            if ~isempty(obj.SelectedRow)
-                backgroundColor(obj.SelectedRow, :) = obj.RowSelectionColor;
+            if ~isempty(obj.SelectedRow) && ~isempty(obj.RowSelectionColor)
+                % Blend the selection highlight with the row's actual color
+                % (50/50 mix) so the underlying color remains visible
+                rowColor = backgroundColor(obj.SelectedRow, :);
+                backgroundColor(obj.SelectedRow, :) = ...
+                    0.5 * rowColor + 0.5 * obj.RowSelectionColor;
             end
             temp = obj.UITable.CellSelectionCallback;
             obj.UITable.CellSelectionCallback = @NOP;
