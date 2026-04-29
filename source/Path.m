@@ -30,9 +30,16 @@ classdef Path
                 % We've passed in another Path
                 pathOut = pathString;
                 return
-            end
-            if ~istext(pathString)
-                error('pathString must be either a text scalar or a Path');
+            elseif isa(pathString, 'struct')
+                if ~isscalar(pathString)
+                    error('Converting struct arrays to Paths is not currently supported, please supply a scalar struct.');
+                end
+                if ~isfield(pathString, 'name') || ~isfield(pathString, 'folder')
+                    error('If pathString is a struct, it must match the struct format output of the dir function.');
+                end
+                pathString = fullfile(pathString.folder, pathString.name);
+            elseif ~istext(pathString)
+                error('pathString must be either a text scalar, a struct output of the dir function, or a Path');
             end
             pathOut.Flavor = options.Flavor;
             switch pathOut.Flavor
@@ -90,7 +97,7 @@ classdef Path
         function disp(path1)
             fn = mfilename("fullpath");
             helpLink = sprintf('<a href="matlab:helpPopup ''%s''">Path</a>', fn);
-            if length(path1) == 1
+            if isscalar(path1)
                 str = path1.str;
                 if isempty(str)
                     str = "";
@@ -245,14 +252,14 @@ classdef Path
             out = exist(path1.str, 'file') && ~exist(path1.str, 'dir');
         end
         function out = is_dir(path1)
-            out = exist(path1.str, 'dir');
+            out = logical(exist(path1.str, 'dir'));
         end
 %         function is_symlink(path1)
 %         end
 %         function is_junction(path1)
 %         end
         function out = is_mount(path1)
-            out = length(path1.Segments) == 1 && path1.is_segment_root(1);
+            out = isscalar(path1.Segments) && path1.is_segment_root(1);
         end
 %         function is_socket(path1)
 %         end
@@ -527,7 +534,7 @@ classdef Path
             segment = path1.Segments(segmentIdx);
             switch path1.Flavor
                 case "Windows"
-                    isRoot = length(regexp(segment, '^[a-zA-Z]\:\\$')) == 1;
+                    isRoot = isscalar(regexp(segment, '^[a-zA-Z]\:\\$'));
                 case "Posix"
                     isRoot = strcmp(segment, '/');
             end
@@ -539,7 +546,7 @@ classdef Path
             end
             switch path1.Flavor
                 case "Windows"
-                    is_drive = length(regexp(str, '^[a-zA-Z]\:$')) == 1;
+                    is_drive = isscalar(regexp(str, '^[a-zA-Z]\:$'));
                 case "Posix"
                     is_drive = isempty(str);
             end            
