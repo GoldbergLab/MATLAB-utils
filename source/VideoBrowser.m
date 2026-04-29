@@ -8,7 +8,7 @@ classdef VideoBrowser < handle
         VideoFrame              matlab.graphics.primitive.Image     % An image object containing the video frame image
         FrameMarker             matlab.graphics.primitive.Line      % A line on the NavigationAxes marking what frame is displayed
         FrameNumberMarker       matlab.graphics.primitive.Text      % Text on the NavigationAxes indicating what frame number is displayed
-        AVPlayer                audioplayer                         % An object for playing the audio and video
+        AVPlayer                audioplayer                         %mode An object for playing the audio and video
         PlayIncrement           double = 1                          % Number of frames the play timer will advance by on each call.
         NumColorChannels        double                              % Number of color channels in the video (1 for grayscale, 3 for color)
         NavigationRedrawEnable  logical = false                     % Enable or disable navigation redraw
@@ -159,12 +159,10 @@ classdef VideoBrowser < handle
 
             if iscell(VideoData)
                 % User must be passing video data and audio data together
-                obj.loadNewVideoData(VideoData{1});
-%                 obj.VideoData = VideoData{1};
+                obj.VideoData = VideoData{1};
                 obj.AudioData = VideoData{2};
             else
-                obj.loadNewVideoData(VideoData);
-%                 obj.VideoData = VideoData;
+                obj.VideoData = VideoData;
             end
 
             % Temporarily disable drawing navigation to prevent all the
@@ -221,16 +219,16 @@ classdef VideoBrowser < handle
                     otherwise
                         error('NavigationDataOrFcn argument must be of type function_handle, char, double, or uint8, not %s.', class(NavigationDataOrFcn));
                 end
-    
-                % Initialize frame selection (no frames initially selected)
-                obj.FrameSelection = false(1, size(obj.VideoData, ndims(obj.VideoData)));
-    
-                % Re-enable navigation redraw, now that everything is set up
-                obj.NavigationRedrawEnable = true;
-    
-                % Update navigation axes
-                obj.drawNavigationData();
             end
+
+            % Initialize frame selection (no frames initially selected)
+            obj.FrameSelection = false(1, size(obj.VideoData, ndims(obj.VideoData)));
+
+            % Re-enable navigation redraw, now that everything is set up
+            obj.NavigationRedrawEnable = true;
+
+            % Update navigation axes
+            obj.drawNavigationData();
         end
         function showHelp(obj, ~, ~, ~) %#ok<INUSD> 
             % Display the help text in a message box
@@ -379,7 +377,6 @@ classdef VideoBrowser < handle
                 
                 % Update status bar
                 obj.StatusBar.String = sprintf('Playing: Frame = %d / %d, time = %0.3f s', obj.CurrentFrameNum, obj.getNumFrames(), obj.CurrentFrameNum / obj.VideoFrameRate);
-%                 drawnow;
             catch me
                 switch me.identifier
                     case {'images:imshow:invalidAxes', 'MATLAB:VideoBrowser:noSelection'}
@@ -599,24 +596,6 @@ classdef VideoBrowser < handle
             % Clear the NavigtationAxes
             cla(obj.NavigationAxes(axNum));
         end
-%         function color = getNavigationColorPoint(obj, frameNum)
-%             if ischar(obj.NavigationColor)
-%                 % Single color string provided
-%                 color = obj.NavigationColor;
-%             elseif isnumeric(obj.NavigationColor)
-%                 if isrow(obj.NavigationColor) && length(obj.NavigationColor) == 3
-%                     % Single RGB triplet provided
-%                     color = obj.NavigationColor;
-%                 elseif size(obj.NavigationColor, 2) == 3 && size(obj.NavigationColor, 1) > 1
-%                     % 3-column array of RGB triplets provided, one color
-%                     % per row
-%                     color = obj.NavigationColor(frameNum, :);
-%                 elseif isvector(obj.NavigationColor)
-%                     % Color palette index has been provided
-%                     color = obj.NavigationAxes.Colormap(frameNum, :);
-%                 end
-%             end
-%         end
         function updateNavigationXLim(obj)
             % Keep the navigation axes x limits up to date based on the
             % desired behavior
@@ -894,7 +873,6 @@ classdef VideoBrowser < handle
     
                             % Plot the navigation data
                             linec(t, obj.NavigationData{axNum}(channel, :) + dataSpacing*(channelIdx-1), 'Color', obj.NavigationColor{axNum}, 'Parent', obj.NavigationAxes(axNum));
-                %             scatter(1:length(navigationData), navigationData, 1, obj.NavigationColor, '.', 'Parent', obj.NavigationAxes);
                         end
                         
                         % Determine minimum y value of first channel of data
@@ -1015,9 +993,6 @@ classdef VideoBrowser < handle
                 obj.FrameSelectionHandles = [obj.FrameSelectionHandles, frameSelectionHandles];
             end
         end
-        function set.VideoFrameRate(obj, frameRate)
-            obj.VideoFrameRate = frameRate;
-        end
         function set.FrameSelection(obj, newSelection)
             % Setter for Selection property
 
@@ -1080,32 +1055,13 @@ classdef VideoBrowser < handle
         function updateAsyncVideoData(obj, ~, evt)
             obj.VideoData(:, :, :, evt.FrameStart:evt.FrameEnd) = evt.Frames;
         end
-        function loadNewVideoData(obj, newVideoData)
+        function set.VideoData(obj, newVideoData)
+            % Setter for the VideoData property
             obj.VideoData = obj.prepareNewVideoData(newVideoData);
             obj.updateNumColorChannels();
             obj.setCurrentFrameNum(1);
             obj.drawNavigationData();
         end
-%         function set.VideoData(obj, newVideoData)
-%             % Setter for the VideoData property
-% 
-%             if obj.Async %#ok<MCSUP> 
-%                 obj.VideoData = newVideoData;
-%             else
-%                 obj.VideoData = obj.prepareNewVideoData(newVideoData);
-%                 obj.updateNumColorChannels();
-%                 obj.setCurrentFrameNum(1);
-%             end
-%             obj.drawNavigationData();
-%         end
-%         function videoData = get.VideoData(obj)
-%             if obj.Async
-%                 % We loaded the video data asynchronously
-%                 videoData = obj.AsyncVideoReader.VideoData;
-%             else
-%                 videoData = obj.VideoData;
-%             end
-%         end
         function set.NavigationDataFunction(obj, newNavigationDataFunction)
             % Setter for the NavigationDataFunction property
             
@@ -1146,7 +1102,7 @@ classdef VideoBrowser < handle
             end
             obj.NavigationData = newNavigationData;
 
-%           obj.drawNavigationData();
+            obj.drawNavigationData();
         end
         function set.NavigationColor(obj, newNavigationColor)
             % Setter for the NavigationColor property
@@ -1256,7 +1212,7 @@ classdef VideoBrowser < handle
             %   index of the NavigationAxes it falls inside will be
             %   returned, otherwise false.
             positions = zeros(obj.getNumNavigationAxes(), 4);
-            for k = 1:length(obj.getNumNavigationAxes())
+            for k = 1:obj.getNumNavigationAxes()
                 positions(k, :) = getWidgetFigurePosition(obj.NavigationAxes(k), obj.MainFigure.Units);
             end
 
