@@ -8,7 +8,7 @@ classdef VideoBrowser < handle
         VideoFrame              matlab.graphics.primitive.Image     % An image object containing the video frame image
         FrameMarker             matlab.graphics.primitive.Line      % A line on the NavigationAxes marking what frame is displayed
         FrameNumberMarker       matlab.graphics.primitive.Text      % Text on the NavigationAxes indicating what frame number is displayed
-        AVPlayer                audioplayer                         %mode An object for playing the audio and video
+        AVPlayer                audioplayer                         % An object for playing the audio and video
         PlayIncrement           double = 1                          % Number of frames the play timer will advance by on each call.
         NumColorChannels        double                              % Number of color channels in the video (1 for grayscale, 3 for color)
         NavigationRedrawEnable  logical = false                     % Enable or disable navigation redraw
@@ -27,11 +27,11 @@ classdef VideoBrowser < handle
         NavigationZoom          double = 1                          % Current navigation axes zoom factor
         ShiftKeyDown            logical = false                     % Boolean flag indicating whether or not the shift key is currently down
         NavigationDivider       matlab.ui.control.UIControl         % A button to allow user to drag navigation axes larger or smaller
-        ProfileTimes            uint64 = zeros(1, 10, 'uint64')
-        ProfileTimestamps       uint64 = zeros(1, 10, 'uint64')
-        ProfileCounts           double = zeros(1, 10)
-        Async                   logical = true
-        AsyncVideoReader        VideoReaderAsync
+        ProfileTimes            uint64 = zeros(1, 10, 'uint64')     % Profiler: cumulative ticks per timer slot, used by tic/toc/showTimes
+        ProfileTimestamps       uint64 = zeros(1, 10, 'uint64')     % Profiler: most recent tic timestamp per timer slot
+        ProfileCounts           double = zeros(1, 10)               % Profiler: number of toc calls per timer slot
+        Async                   logical = true                      % If true, video is loaded asynchronously via VideoReaderAsync
+        AsyncVideoReader        VideoReaderAsync                    % Async loader instance used when Async is true
     end
     properties
         MainFigure              matlab.ui.Figure                    % The main figure window
@@ -45,7 +45,7 @@ classdef VideoBrowser < handle
         ChannelMode = 'all'                             % For multichannel navigation data, which channels should be displayed when navigation function is 'audio' or 'spectrogram'. One of 'all', 'first', or a scalar/vector of channel indices
     end
     properties (SetObservable)
-        VideoData = []                          % The video data itself, a N x H x W double or uint8 array,
+        VideoData = []                          % The video data itself: H x W x N (grayscale) or H x W x 3 x N (color) double or uint8 array
         VideoPath = ''                          % Path to video, if provided
         NavigationData = []                     % The 1D navigational data, a 1 x N array
         NavigationDataFunction = []             % A function handle that takes video data as an argument, and returns navigation data
@@ -75,14 +75,14 @@ classdef VideoBrowser < handle
             %           of audio samples.
             %   The following are optional name-value pairs:
             %   NavigationData = one of the following, or a cell array
-            %           containing multiple of these options. If a cell 
-            %           array is passed, multiple navigation axes will be,
-            %           stacked each showing the selected navigation 
-            %           options in order from top tobottom.
+            %           containing multiple of these options. If a cell
+            %           array is passed, multiple navigation axes will be
+            %           stacked, each showing the selected navigation
+            %           options in order from top to bottom.
             %       1. A 1 x N array, to be plotted in the NavigationAxes
-            %       2. A function handle which takes N x H x W (x 3)
-            %           VideoData array as an argument and returns a 1 x N 
-            %           array as a result, to be plotted in the 
+            %       2. A function handle which takes a N x H x W (x 3)
+            %           VideoData array as an argument and returns a 1 x N
+            %           array as a result, to be plotted in the
             %           NavigationAxes
             %       3. A string referring to one of the predefined
             %           video-analysis functions:
@@ -91,29 +91,37 @@ classdef VideoBrowser < handle
             %               each frame
             %           - 'compactness' - plot measure of how compact the
             %               blobs of pixel values are
-            %       3. A string referring to one of the predefined
+            %       4. A string referring to one of the predefined
             %           audio-analysis functions:
             %           - 'audio' - plot the raw audio waveforms
             %           - 'spectrogram' - plot a spectrogram of the audio
-            %       4. An empty array, or omitted, which results in blank 
+            %       5. An empty array, or omitted, which results in blank
             %           NavigationAxes
-            %   NavigationColor = an optional color specification for the 
-            %       points in the NavigationAxes scatter plot. See the 
-            %       color argument for the scatter function for 
-            %       documentation. This can also be a cell array if 
-            %       multiple navigation axes are specified in the 
-            %       NavigationDataOrFcn argument.
-            %   NavigationColormap = an optional colormap for the 
-            %       navigation axes. This can also be a cell array if 
-            %       multiple navigation axes arespecified in the 
-            %       NavigationDataOrFcn argument.
-            %   NavigationCLim = optional color limits for the navigation 
+            %   NavigationColor = an optional color specification for the
+            %       points in the NavigationAxes scatter plot. See the
+            %       color argument for the scatter function for
+            %       documentation. This can also be a cell array if
+            %       multiple navigation axes are specified in the
+            %       NavigationData argument.
+            %   NavigationColormap = an optional colormap for the
+            %       navigation axes. This can also be a cell array if
+            %       multiple navigation axes are specified in the
+            %       NavigationData argument.
+            %   NavigationCLim = optional color limits for the navigation
             %       axes, expressed as a two-element vector [cmin, cmax].
-            %       This can also be a cell array if multiple navigation 
-            %       axes are specified in the NavigationDataOrFcn argument.
-            %   Async = on optional boolean flag indicating whether or not
+            %       This can also be a cell array if multiple navigation
+            %       axes are specified in the NavigationData argument.
+            %   NavigationScrollMode = how the navigation axes should
+            %       scroll when zoomed in. One of 'centered', 'partial',
+            %       'sweep' (default), or 'none'. See NavigationScrollMode
+            %       property for details.
+            %   Async = an optional boolean flag indicating whether or not
             %       to load the video asynchronously in the background.
-            %   title = a char array to use as the image title
+            %   VideoFrameRate = frame rate of the video in fps. Ignored
+            %       when VideoData is a file path (rate is read from file).
+            %   AudioSampleRate = sample rate of the audio in Hz. Ignored
+            %       when VideoData is a file path (rate is read from file).
+            %   Title = a char array to use as the image title.
             arguments
                 VideoData = []
                 options.NavigationData = [];
@@ -271,12 +279,13 @@ classdef VideoBrowser < handle
             f.UserData.text = uicontrol(f, 'Style', 'text', 'Units', 'normalized', 'Position', [0.01, 0.01, 0.99, 0.99], 'FontName', 'Monospaced', 'String', helpText, 'HorizontalAlignment','left');
         end
         function playVideo(obj, selectedOnly)
-            % Start audio/video playback
-            
-            if ~exist('selectedOnly', 'var') || isempty(selectedOnly)
-                % By default play all frames, not just the selected ones
-                selectedOnly = false;
+            % Start audio/video playback. If selectedOnly is true, only
+            % currently-selected frames are played.
+            arguments
+                obj VideoBrowser
+                selectedOnly logical = false
             end
+
             warning('off', 'MATLAB:TIMER:RATEPRECISION');
             warning('off', 'MATLAB:timer:miliSecPrecNotAllowed');
             if obj.PlaybackSpeed < 0
@@ -324,19 +333,23 @@ classdef VideoBrowser < handle
             warning('on', 'MATLAB:timer:miliSecPrecNotAllowed');
         end
         function tic(obj, timerNum)
+            % Start the profiler stopwatch for the given timer slot
             obj.ProfileTimestamps(timerNum) = tic();
         end
         function toc(obj, timerNum)
+            % Accumulate elapsed time and call count for the given timer slot
             obj.ProfileTimes(timerNum) = obj.ProfileTimes(timerNum) + (tic() - obj.ProfileTimestamps(timerNum));
             obj.ProfileCounts(timerNum) = obj.ProfileCounts(timerNum) + 1;
         end
         function showTimes(obj)
+            % Print accumulated profiler stats for all timer slots
             fprintf('\n');
             for timerNum = 1:length(obj.ProfileTimes)
                 fprintf('Timer #%02d: %f sec, %03d calls, %f sec/call, max freq: %f Hz\n', timerNum, double(obj.ProfileTimes(timerNum))/10000000, obj.ProfileCounts(timerNum), double(obj.ProfileTimes(timerNum)/obj.ProfileCounts(timerNum))/10000000, 1/(double(obj.ProfileTimes(timerNum)/obj.ProfileCounts(timerNum))/10000000));
             end
         end
         function clearTimes(obj)
+            % Reset all profiler timer slots to zero
             for timerNum = 1:length(obj.ProfileTimes)
                 obj.ProfileCounts(timerNum) = 0;
                 obj.ProfileTimes(timerNum) = 0;
@@ -344,6 +357,8 @@ classdef VideoBrowser < handle
             end
         end
         function playFcn(obj, selectedOnly)
+            % Audio-timer callback: advance the displayed video frame to
+            % stay synchronized with audio playback time.
             arguments
                 obj VideoBrowser
                 selectedOnly logical
@@ -452,9 +467,7 @@ classdef VideoBrowser < handle
             end
             if isempty(nextFrame)
                 % Ok, there is no selection.
-                err.message = 'No selection found';
-                err.identifier = 'MATLAB:VideoBrowser:noSelection';
-                error(err);
+                error('MATLAB:VideoBrowser:noSelection', 'No selection found');
             end
         end
         function deleteDisplayArea(obj)
@@ -513,9 +526,12 @@ classdef VideoBrowser < handle
             obj.VideoAxes.Position =         rangeCoerce([margin, fraction + 2*margin,       1-2*margin, 1-fraction - 1.5 * margin], [0, 1]);
         end
         function NavigationDividerMouseDown(obj, ~, ~)
+            % Callback fired when user begins dragging the divider between
+            % the video axes and the navigation panel
             obj.IsNavDividerDragging = true;
         end
         function numNavigationAxes = getNumNavigationAxes(obj)
+            % Return the number of stacked navigation axes
             numNavigationAxes = length(obj.NavigationData);
         end
         function createDisplayArea(obj)
@@ -593,7 +609,7 @@ classdef VideoBrowser < handle
             end
         end
         function clearNavigationData(obj, axNum)
-            % Clear the NavigtationAxes
+            % Clear the NavigationAxes
             cla(obj.NavigationAxes(axNum));
         end
         function updateNavigationXLim(obj)
@@ -706,12 +722,14 @@ classdef VideoBrowser < handle
         end
         function drawNavigationData(obj, replot)
             % Draw the NavigationData on the NavigationAxes. If only a
-            %   NavigationDataFunction is provide, it will be used here to
-            %   generate NavigationData
-            if ~exist('replot', 'var') || isempty(replot)
-                replot = true;
+            %   NavigationDataFunction is provided, it will be used here to
+            %   generate NavigationData. If replot is false, only axes
+            %   settings are updated; the data itself is not redrawn.
+            arguments
+                obj VideoBrowser
+                replot logical = true
             end
-            
+
             if ~obj.NavigationRedrawEnable
                 return;
             end
@@ -921,6 +939,9 @@ classdef VideoBrowser < handle
             duration = obj.getNumFrames() / obj.VideoFrameRate;
         end
         function updateNavigationAxesContextMenu(obj, axNums)
+            % (Re)build the right-click context menu on the given
+            % navigation axes (defaults to all). Currently provides an
+            % "Alter color limits" entry that opens CLimGUI.
             arguments
                 obj VideoBrowser
                 axNums double = 1:obj.getNumNavigationAxes()
@@ -936,15 +957,18 @@ classdef VideoBrowser < handle
                 obj.NavigationAxes(axNum).ContextMenu = context_menu;
             end
         end
-        function updateFrameMarker(obj, varargin)
+        function updateFrameMarker(obj, redraw)
             % Update the FrameMarker and FrameNumberMarker on the
-            %   NavigationAxes to reflect the CurrentFrameNumber
-            if nargin == 2
-                redraw = varargin{1};
-                if redraw
-                    delete(obj.FrameMarker);
-                    delete(obj.FrameNumberMarker);
-                end
+            %   NavigationAxes to reflect the CurrentFrameNumber. If
+            %   redraw is true, the existing markers are deleted first
+            %   (used to force a fresh draw with new properties).
+            arguments
+                obj VideoBrowser
+                redraw logical = false
+            end
+            if redraw
+                delete(obj.FrameMarker);
+                delete(obj.FrameNumberMarker);
             end
 
             % Update frame marker (vertical line on navigation axes
@@ -1053,6 +1077,10 @@ classdef VideoBrowser < handle
             end
         end
         function updateAsyncVideoData(obj, ~, evt)
+            % Callback fired by the async video reader when a new batch of
+            % frames is ready; writes them into the pre-allocated buffer.
+            % NOTE: currently assumes 4D (color) layout — see TODO around
+            % grayscale async support.
             obj.VideoData(:, :, :, evt.FrameStart:evt.FrameEnd) = evt.Frames;
         end
         function set.VideoData(obj, newVideoData)
@@ -1111,10 +1139,12 @@ classdef VideoBrowser < handle
             obj.drawNavigationData();
         end
         function setCurrentFrameNum(obj, newFrameNum)
+            % Method form of setting CurrentFrameNum (useful for callbacks
+            % that need a function handle rather than a property assignment)
             obj.CurrentFrameNum = newFrameNum;
         end
         function set.CurrentFrameNum(obj, newFrameNum)
-            % Setter for the CurrrentFrameNum property
+            % Setter for the CurrentFrameNum property
             obj.CurrentFrameNum = mod(newFrameNum - 1, obj.getNumFrames()) + 1;
             obj.updateVideoFrame();
             obj.updateFrameMarker();
@@ -1128,7 +1158,7 @@ classdef VideoBrowser < handle
             obj.updateFrameMarker(true);
         end
         function selectedOnly = IsPlayingSelectedOnly(obj)
-            % Setter for IsPlayingSelectedOnly property
+            % Return true if playback is currently in selected-only mode
             selectedOnly = obj.AVPlayer.UserData.selectedOnly;
         end
         function set.PlaybackSpeed(obj, fps)
@@ -1200,9 +1230,12 @@ classdef VideoBrowser < handle
             end
         end
         function clearSelection(obj)
+            % Deselect all frames
             obj.FrameSelection = false(1, size(obj.VideoData, ndims(obj.VideoData)));
         end
         function [x, y] = getCurrentVideoPoint(obj)
+            % Return integer pixel coordinates of the cursor within the
+            % video axes (rounded from VideoAxes.CurrentPoint)
             x = round(obj.VideoAxes.CurrentPoint(1, 1));
             y = round(obj.VideoAxes.CurrentPoint(1, 2));
         end
@@ -1339,11 +1372,15 @@ classdef VideoBrowser < handle
             y = (obj.MainFigure.CurrentPoint(1, 2) - panelY0) / panelH;
         end
         function ZoomIntoPoint(obj, x, y, zoomFactor)
+            % Zoom video axes by zoomFactor, keeping (x, y) at center.
+            % zoomFactor < 1 zooms in; > 1 zooms out.
             dx = diff(obj.VideoAxes.XLim) * zoomFactor;
             dy = diff(obj.VideoAxes.YLim) * zoomFactor;
             obj.ZoomVideoAxes(x - dx/2, y - dy/2, x + dx/2, y + dy/2);
         end
         function ScrollHandler(obj, ~, evt)
+            % Mouse scroll wheel callback: zoom video axes, or zoom/pan
+            % navigation axes (shift+scroll pans instead of zooming).
             [xFig, yFig] = obj.GetCurrentVideoPanelPoint();
             
             [inVideoAxes, inNavigationAxes, ~] = obj.whereIsMouse(xFig, yFig);
@@ -1386,6 +1423,9 @@ classdef VideoBrowser < handle
             end
         end
         function [inVideoAxes, inNavigationAxes, inNavigationDivider] = whereIsMouse(obj, x, y)
+            % Hit-test the figure point (x, y) against the video axes,
+            % navigation axes, and navigation divider; exactly one of the
+            % returned flags will be true (or none, if outside all three).
             if obj.inVideoAxes(x, y)
                 inVideoAxes = true;
                 inNavigationAxes = false;
@@ -1493,12 +1533,15 @@ classdef VideoBrowser < handle
             end
         end
         function MouseUpHandler(obj, ~, ~)
+            % Mouse-button-released callback: ends frame-selection drag
+            % and navigation divider drag if either was in progress.
             obj.IsSelectingFrames = false;
             obj.IsNavDividerDragging = false;
         end
         function ChangeSpeedHandler(obj, evt, direction)
-            % Video is playing - instead of changing frame, change
-            % playback speed
+            % Helper invoked from KeyPressHandler when arrow keys are
+            % pressed during playback: bumps PlaybackSpeed up/down by
+            % 1 fps (or 10 fps with control held).
             if any(strcmp(evt.Modifier, 'control'))
                 % User is holding down control - change by 10 fps
                 delta = 10 * direction;
@@ -1511,7 +1554,10 @@ classdef VideoBrowser < handle
             warning('on', 'MATLAB:TIMER:RATEPRECISION');
         end
         function ChangeFrameHandler(obj, evt, direction)
-            % direction should be 1 or -1
+            % Helper invoked from KeyPressHandler when arrow keys are
+            % pressed while paused: advance CurrentFrameNum by `direction`
+            % (must be 1 or -1). Control multiplies by 10; shift extends
+            % the current FrameSelection across the swept range.
             select = false;
             delta = 1 * direction;
             if any(strcmp(evt.Modifier, 'control'))
@@ -1534,12 +1580,16 @@ classdef VideoBrowser < handle
             end
         end
         function KeyReleaseHandler(obj, ~, evt)
+            % Key-released callback: tracks shift-key state for
+            % shift+scroll panning behavior.
             switch evt.Key
                 case 'shift'
                     obj.ShiftKeyDown = false;
             end
         end
         function KeyPressHandler(obj, ~, evt)
+            % Key-pressed callback: dispatches keyboard shortcuts.
+            % See showHelp() for the full list of bindings.
             switch evt.Key
                 case 'escape'
                     obj.clearSelection();
@@ -1606,10 +1656,13 @@ classdef VideoBrowser < handle
             end
         end
         function ResizeHandler(obj, ~, ~)
+            % Figure-resize callback: refreshes the video frame and
+            % nav-axes frame marker so they re-fit the new layout.
             obj.updateVideoFrame();
             obj.updateFrameMarker();
         end
         function delete(obj)
+            % Destructor: stops audio playback and tears down all graphics.
             if isvalid(obj.AVPlayer)
                 stop(obj.AVPlayer);
             end
