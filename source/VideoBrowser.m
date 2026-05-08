@@ -19,6 +19,8 @@ classdef VideoBrowser < handle
         ZoomBox                 matlab.graphics.primitive.Rectangle % Handle to zoom box rectangle
         IsSelectingFrames       logical = false                     % Boolean flag indicating whether or not user is currently selecting frames in the navigation axes
         IsNavDividerDragging    logical = false                     % Boolean flag indicating whether or not user is currently dragging the navigation divider
+        NavMouseDownFrame       double = []                         % Frame at the most recent navigation-axes mousedown (used to distinguish click vs. drag)
+        NavDragOccurred         logical = false                     % Whether the cursor moved away from NavMouseDownFrame during the current drag
         FrameSelectStart        double                              % Start frame of new frame selection
         FrameSelectionHandles   matlab.graphics.primitive.Rectangle % Handles to selection highlight rectangles
 %        NavigationMapMode       char = 'frame'                      % Determine how the navigation axis position is mapped to a frame number - either 'frame' or 'time'
@@ -1488,6 +1490,9 @@ classdef VideoBrowser < handle
                     obj.CurrentFrameNum = frameNum;
                 end
                 if obj.IsSelectingFrames && obj.FrameSelectStart > 0 && frameNum > 0
+                    if frameNum ~= obj.NavMouseDownFrame
+                        obj.NavDragOccurred = true;
+                    end
                     selectBounds = sort([obj.FrameSelectStart, frameNum]);
                     switch obj.MainFigure.SelectionType
                         case 'normal'
@@ -1522,6 +1527,8 @@ classdef VideoBrowser < handle
                 frameNum = obj.mapFigureXToFrameNum(xFig);
                 obj.FrameSelectStart = frameNum;
                 obj.IsSelectingFrames = true;
+                obj.NavMouseDownFrame = frameNum;
+                obj.NavDragOccurred = false;
 
                 % Set current frame to the click location
                 obj.CurrentFrameNum = frameNum;
@@ -1534,7 +1541,12 @@ classdef VideoBrowser < handle
         end
         function MouseUpHandler(obj, ~, ~)
             % Mouse-button-released callback: ends frame-selection drag
-            % and navigation divider drag if either was in progress.
+            % and navigation divider drag if either was in progress. A
+            % click on the navigation axes that did not drag clears the
+            % current frame selection.
+            if obj.IsSelectingFrames && ~obj.NavDragOccurred && any(obj.FrameSelection)
+                obj.clearSelection();
+            end
             obj.IsSelectingFrames = false;
             obj.IsNavDividerDragging = false;
         end
