@@ -93,13 +93,24 @@ ylimits = ylim(ax);
 y_min = ylimits(1);
 dy = diff(ylimits);
 
+% rectangle's FaceColor silently drops the alpha channel from a
+% 4-element RGBA color, so split it off and apply it via FaceAlpha
+% (a separate property) to actually get the documented transparency.
+if length(color) == 4
+    faceAlpha = color(4);
+    faceColor = color(1:3);
+else
+    faceAlpha = 1;
+    faceColor = color;
+end
+
 % Loop over on/off locations, and produce rectangles to span them.
 rectangles = rectangle().empty();
 for k = 1:length(ons)
     on = ons(k);
     off = offs(k);
     dx = off - on;
-    rectangles(k) = rectangle(ax, 'Position', [on, y_min - dy, dx, dy * 3], 'FaceColor', color, 'EdgeColor', 'none');
+    rectangles(k) = rectangle(ax, 'Position', [on, y_min - dy, dx, dy * 3], 'FaceColor', faceColor, 'FaceAlpha', faceAlpha, 'EdgeColor', 'none');
 end
 
 ylim(ax, ylimits);

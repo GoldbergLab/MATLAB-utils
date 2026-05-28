@@ -17,7 +17,9 @@ classdef CLimGUI < handle
         UpperBoundIncreaseButton    matlab.ui.control.UIControl
         UpperBoundDecreaseButton    matlab.ui.control.UIControl
         BoundEntries                matlab.ui.control.UIControl
+        ResetButton                 matlab.ui.control.UIControl
         IsSelectingCLim             logical
+        InitialCLim                 (1, 2) double
         BoundsToText                function_handle = @(bound)sprintf('%.03f', bound)
     end
     properties (Dependent)
@@ -76,16 +78,40 @@ classdef CLimGUI < handle
             obj.BoundEntries(1) =          uicontrol("Parent", obj.ControlPanel, "Style", "edit", "String", '', "Units", "normalized",        "Position", [0.250, 0.000, 0.250, 1.000], "Callback", @(~, ~)obj.CLimChangeHandler());
             obj.BoundEntries(2) =          uicontrol("Parent", obj.ControlPanel, "Style", "edit", "String", '', "Units", "normalized",        "Position", [0.500, 0.000, 0.250, 1.000], "Callback", @(~, ~)obj.CLimChangeHandler());
             obj.HistogramAxes = axes(obj.ParentFigure);
+            % Reset button sits over the upper-left of the histogram axes
+            % and snaps the color limits back to whatever was active when
+            % the GUI opened. Created here so we can show/hide it together
+            % with the histogram in the no-image branch below.
+            obj.ResetButton = uicontrol("Parent", obj.ParentFigure, ...
+                "Style", "pushbutton", ...
+                "String", char(8634), ...
+                "FontWeight", "bold", ...
+                "Tooltip", "Reset color scale to initial value", ...
+                "Units", "normalized", ...
+                "Position", [0.000, 0.940, 0.060, 0.060], ...
+                "Callback", @(~, ~)obj.ResetCLim());
             if ~isvalid(obj.Image) || isempty(obj.Image)
                 obj.ControlPanel.Position =  [0.000, 0.000, 1.000, 1.000];
                 obj.HistogramAxes.Visible = "off";
+                obj.ResetButton.Visible = "off";
             else
                 obj.ControlPanel.Position =  [0.000, 0.000, 1.000, 0.500];
                 obj.HistogramAxes.Position = [0.000, 0.500, 1.000, 0.500];
             end
             obj.UpdateCLimFromAxes();
+            % Snapshot the initial color limits so the reset button has
+            % something to restore. Must happen after UpdateCLimFromAxes
+            % so we capture the value pulled from the image axes.
+            obj.InitialCLim = obj.GetCLim();
             obj.UpdateHistogram();
             obj.UpdateHistogramHighlight();
+        end
+        function ResetCLim(obj)
+            % Restore the color limits to whatever they were when the GUI
+            % opened. Routed through SetCLim/CLimChangeHandler so the
+            % image axes, the entry fields, and the histogram highlight
+            % all update in one shot.
+            obj.SetCLim(1:2, obj.InitialCLim);
         end
         function image = get.Image(obj)
             if ~isempty(obj.ImageFunction)
