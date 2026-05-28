@@ -18,6 +18,7 @@ classdef CLimGUI < handle
         UpperBoundDecreaseButton    matlab.ui.control.UIControl
         BoundEntries                matlab.ui.control.UIControl
         ResetButton                 matlab.ui.control.UIControl
+        HoverEdgeIndicator          matlab.graphics.primitive.Line
         IsSelectingCLim             logical
         InitialCLim                 (1, 2) double
         BoundsToText                function_handle = @(bound)sprintf('%.03f', bound)
@@ -203,12 +204,11 @@ classdef CLimGUI < handle
             obj.HistogramAxes.Units = originalUnits;
         end
         function MouseMotionHandler(obj, ~, ~)
-            if obj.IsSelectingCLim
-                xFig = obj.ParentFigure.CurrentPoint(1, 1);
-                yFig = obj.ParentFigure.CurrentPoint(1, 2);
-    
-                if obj.inHistogramAxes(xFig, yFig)
-                    colorVal = obj.mapFigureXToColor(xFig);
+            xFig = obj.ParentFigure.CurrentPoint(1, 1);
+            yFig = obj.ParentFigure.CurrentPoint(1, 2);
+            if obj.inHistogramAxes(xFig, yFig)
+                colorVal = obj.mapFigureXToColor(xFig);
+                if obj.IsSelectingCLim
                     currentCLim = obj.GetCLim();
                     middleCLim = mean(currentCLim);
                     if colorVal <= middleCLim
@@ -217,8 +217,51 @@ classdef CLimGUI < handle
                         obj.SetCLim(2, colorVal);
                     end
                 end
+                % Always refresh the hover indicator while the mouse is in
+                % the histogram axes. When dragging, the SetCLim above runs
+                % CLimChangeHandler which clears the axes via UpdateHistogram,
+                % so the indicator has to be redrawn after that path runs.
+                obj.UpdateHoverEdgeIndicator(colorVal);
+            else
+                % Mouse left the histogram axes (still in the figure) -
+                % drop the indicator so it does not linger at a stale
+                % position. If the mouse exits the figure entirely the
+                % indicator stays until the next motion event, which is
+                % visually fine.
+                obj.UpdateHoverEdgeIndicator([]);
             end
-
+        end
+        function UpdateHoverEdgeIndicator(obj, colorVal)
+            % Draw a thick vertical line at the CLim edge that a click at
+            % the current mouse position would grab. Pass [] to clear the
+            % indicator (used when the mouse leaves the histogram axes).
+            if isempty(colorVal)
+                delete(obj.HoverEdgeIndicator);
+                obj.HoverEdgeIndicator = matlab.graphics.primitive.Line.empty();
+                return;
+            end
+            currentCLim = obj.GetCLim();
+            middleCLim = mean(currentCLim);
+            if colorVal <= middleCLim
+                edgeX = currentCLim(1);
+            else
+                edgeX = currentCLim(2);
+            end
+            yl = ylim(obj.HistogramAxes);
+            if isempty(obj.HoverEdgeIndicator) || ~isvalid(obj.HoverEdgeIndicator)
+                % cla in UpdateHistogram nukes prior line handles, so we
+                % may need to recreate it on every motion event during a
+                % drag. The cost is one line() call per event - cheap.
+                obj.HoverEdgeIndicator = line(obj.HistogramAxes, ...
+                    [edgeX, edgeX], yl, ...
+                    'Color', [1, 0, 0], ...
+                    'LineWidth', 3, ...
+                    'HitTest', 'off', ...
+                    'PickableParts', 'none');
+            else
+                obj.HoverEdgeIndicator.XData = [edgeX, edgeX];
+                obj.HoverEdgeIndicator.YData = yl;
+            end
         end
         function MouseDownHandler(obj, ~, ~)
             % Handle user mouse click
