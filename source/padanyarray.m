@@ -12,6 +12,9 @@ function B = padanyarray(A, padsize, padval, options)
 %       Direction: One of 'pre', 'post', or 'both'
 %       Method: One of 'replicate' or 'value'. 'circular' and 'symmetric'
 %           have not been implemented yet.
+%       Mode: One of 'PadBy' (default) or 'PadTo'. PadBy mode, like 
+%           padarray, adds on the given amount of padding. PadTo ensures
+%           that each dimension is at least as big as the given size.
 %    B is the padded array
 %
 % The MATLAB builtin padarray can only handle numeric, logical, or
@@ -32,6 +35,7 @@ arguments
     padval = []
     options.Direction {mustBeMember(options.Direction, {'pre', 'post', 'both'})} = 'both'
     options.Method {mustBeMember(options.Method, {'circular', 'replicate', 'symmetric', 'value'})} = 'value'
+    options.Mode {mustBeMember(options.Mode, {'PadTo', 'PadBy'})} = 'PadBy'
 end
 
 direction = options.Direction;
@@ -42,6 +46,11 @@ if iscell(A) && ~iscell(padval)
 end
 
 padsize = [padsize, ones(1, length(size(A)) - length(padsize))];
+
+if strcmp(options.Mode, 'PadTo')
+    padsize = padsize - size(A);
+    padsize(padsize < 0) = 0;
+end
 
 B = A;
 
